@@ -1,2 +1,2 @@
-# java-project
-java-project
+# Java-WebAPP-CI
+Java-WebAPP-CI
