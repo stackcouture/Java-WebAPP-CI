@@ -54,10 +54,10 @@
             <id>maven-releases</id>
             <url>http://3.110.153.162:8081/repository/maven-releases/</url>
         </repository>
-        <snapshotRepository>
+        <repository>
             <id>maven-snapshots</id>
             <url>http://3.110.153.162:8081/repository/maven-snapshots/</url>
-        </snapshotRepository>
+        </repository>
     </distributionManagement>
 </project>
 
