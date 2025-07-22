@@ -5,7 +5,7 @@ pipeline {
     }
 
     parameters {
-        string(name: 'ECR_REPO_NAME', defaultValue: 'java-app', description: 'Enter repository name')
+        string(name: 'ECR_REPO_NAME', defaultValue: 'javaspring', description: 'Enter repository name')
         string(name: 'AWS_ACCOUNT_ID', defaultValue: '123456789012', description: 'Enter AWS Account ID')
         string(name: 'BRANCH', defaultValue: 'main', description: 'Deployment branch for CD repo')
     }
@@ -82,7 +82,12 @@ pipeline {
 
         stage('Login to ECR & Tag Image') {
             steps {
-                 withAWS(credentials: 'aws-jenkins-creds', region: 'ap-south-1') {
+                 withCredentials([[
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws-jenkins-creds',
+                        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                        secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                 ]]) {
                         sh """
                             aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com
                             docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
@@ -105,7 +110,12 @@ pipeline {
 
         stage('Push Image to ECR') {
             steps {
-                 withAWS(credentials: 'aws-jenkins-creds', region: 'ap-south-1') { 
+                  withCredentials([[
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws-jenkins-creds',
+                        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                        secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                 ]]) {
                     sh """
                         docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
                         docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
