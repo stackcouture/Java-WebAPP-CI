@@ -42,9 +42,15 @@ pipeline {
             }
         }
         
-        stage('Test') {
+        // stage('Test') {
+        //     steps {
+        //         sh 'mvn clean test'
+        //     }
+        // }
+        
+        stage('Build with Maven') {
             steps {
-                sh 'mvn clean test'
+                sh 'mvn clean package'
             }
         }
 
@@ -70,12 +76,6 @@ pipeline {
                         echo "Trivy scan failed: ${err}"
                     }
                 }
-            }
-        }
-
-        stage('Build with Maven') {
-            steps {
-                sh 'mvn clean package -DskipTests'
             }
         }
 
