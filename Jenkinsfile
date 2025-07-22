@@ -82,13 +82,12 @@ pipeline {
 
         stage('Login to ECR & Tag Image') {
             steps {
-                 withAWS(credentials: 'aws-jenkins-creds', region: 'ap-south-1') {{
+                 withAWS(credentials: 'aws-jenkins-creds', region: 'ap-south-1') {
                         sh """
                             aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com
                             docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
                             docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
                         """
-                    }
                 }
             }
         }
