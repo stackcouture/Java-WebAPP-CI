@@ -129,6 +129,21 @@ pipeline {
             }
         }
 
+        stage('Confirm YAML Update') {
+            when {
+                expression { return params.BRANCH == 'main' }
+            }
+            steps {
+                script {
+                    def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
+                        choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
+                    ]
+                    if (confirm == 'No') {
+                        error 'Aborted by user.'
+                    }
+                }
+            }
+        }
         stage('Update YAML File - FINAL') {
             steps {
                 withCredentials([
@@ -165,19 +180,24 @@ pipeline {
                 }
             }
         }
-
-
     }
 
    post {
         always {
             archiveArtifacts artifacts: '**/fs.html', allowEmptyArchive: true
-            archiveArtifacts artifacts: '**/trivy-image-scan.html', allowEmptyArchive: true
+            junit 'target/surefire-reports/*.xml'
+        }   
+        success {
 
+            // archiveArtifacts artifacts: '**/fs.html', allowEmptyArchive: true
+            // archiveArtifacts artifacts: '**/trivy-image-scan.html', allowEmptyArchive: true
+            script {
+                    SHORT_SHA = env.COMMIT_SHA.take(7)
+            }       
             emailext(
                 attachLog: true,
                 attachmentsPattern: 'target/surefire-reports/*.xml',
-                subject: "${env.JOB_NAME} - Build #${env.COMMIT_SHA} - ${currentBuild.result}",
+                subject: "${env.JOB_NAME} - Build #${SHORT_SHA} - ${currentBuild.result}",
                 body: """\
                         <p>Build Status: ${currentBuild.result}</p>
                         <p>Project: ${env.JOB_NAME}</p>
@@ -187,14 +207,6 @@ pipeline {
                 to: 'naveenramlu@gmail.com',
                 mimeType: 'text/html'
             )
-
-            // slackSend(
-            //     channel: env.SLACK_CHANNEL,
-            //     message: "Deployment succeeded in ${env.JOB_NAME} - Build #${env.COMMIT_SHA}",
-            //     token: env.SLACK_TOKEN,
-            //     color: 'good'
-            // )
-            
             wrap([$class: 'BuildUser']) {
                 slackSend(
                     channel: env.SLACK_CHANNEL,
