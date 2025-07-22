@@ -44,7 +44,7 @@ pipeline {
 
         stage('Sonar Analysis') {
             steps {
-                withSonarQubeEnv(credentialsId: 'sonar-token') {
+                withSonarQubeEnv('sonar-server') {
 	               sh ''' 
                 		mvn clean verify sonar:sonar \
                 		-Dsonar.projectKey=Java-App
