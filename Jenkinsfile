@@ -41,12 +41,25 @@ pipeline {
                 }
             }
         }
-        
-        // stage('Test') {
-        //     steps {
-        //         sh 'mvn clean test'
-        //     }
-        // }
+
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv(credentialsId: 'sonar-token') {
+	               sh ''' 
+                		mvn clean verify sonar:sonar \
+                		-Dsonar.projectKey=Java-App
+	                   '''
+                    }
+            }
+        }
+
+        stage('Quality Gates') {
+            steps {
+                script {
+                        waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                    }	
+                }
+        }
         
         stage('Build with Maven') {
             steps {
@@ -144,6 +157,7 @@ pipeline {
                 }
             }
         }
+
         stage('Update YAML File - FINAL') {
             steps {
                 withCredentials([
@@ -188,9 +202,6 @@ pipeline {
             junit 'target/surefire-reports/*.xml'
         }   
         success {
-
-            // archiveArtifacts artifacts: '**/fs.html', allowEmptyArchive: true
-            // archiveArtifacts artifacts: '**/trivy-image-scan.html', allowEmptyArchive: true
             script {
                     SHORT_SHA = env.COMMIT_SHA.take(7)
             }       
@@ -219,7 +230,7 @@ pipeline {
                         *Build Number:* #${env.BUILD_NUMBER}
                         *Branch:* `${env.GIT_BRANCH}`
                         *Triggered By:* ${BUILD_USER} 👤
-                        *Build URL:* <${env.BUILD_URL}|Click to view in Jenkins>
+                        *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
 
                         _This is an automated notification from Jenkins 🤖_
                         """
