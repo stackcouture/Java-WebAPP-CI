@@ -28,6 +28,14 @@ pipeline {
             }
         }
 
+         stage('Checkout Code') {
+            steps {
+                script {
+                    env.COMMIT_SHA = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                }
+            }
+         }
+
         stage('Compile') {
             steps {
                 sh 'mvn clean compile'
@@ -83,7 +91,7 @@ pipeline {
                     ]) {
                         sh """
                             aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com
-                            docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.BUILD_NUMBER}
+                            docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
                             docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
                         """
                     }
@@ -91,11 +99,14 @@ pipeline {
             }
         }
 
-        stage('Trivy Image Scan') {
+       stage('Trivy Image Scan') {
             steps {
-                sh """
-                    trivy image --format table -o trivy-image-scan.html ${params.ECR_REPO_NAME}
-                """
+                script {
+                    def ecrImageFullTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                    sh """
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL --format table -o trivy-image-scan.html ${ecrImageFullTag}
+                    """
+                }
             }
         }
 
@@ -106,7 +117,7 @@ pipeline {
                     string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')
                 ]) {
                     sh """
-                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.BUILD_NUMBER}
+                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
                         docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
                     """
                 }
@@ -119,7 +130,7 @@ pipeline {
                     usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')
                 ]) {
                     script {
-                        def imageTag = env.BUILD_NUMBER
+                        def imageTag = ${env.COMMIT_SHA}
                         def branch = params.BRANCH
                         def repoDir = 'Java-WebAPP-CD'
 
@@ -161,11 +172,11 @@ pipeline {
             emailext(
                 attachLog: true,
                 attachmentsPattern: 'target/surefire-reports/*.xml',
-                subject: "${env.JOB_NAME} - Build #${env.BUILD_NUMBER} - ${currentBuild.result}",
+                subject: "${env.JOB_NAME} - Build #${env.COMMIT_SHA} - ${currentBuild.result}",
                 body: """\
                         <p>Build Status: ${currentBuild.result}</p>
                         <p>Project: ${env.JOB_NAME}</p>
-                        <p>Build Number: ${env.BUILD_NUMBER}</p>
+                        <p>Build Number: ${env.COMMIT_SHA}</p>
                         <p>URL: <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                     """, // closing triple-quote and comma must be on the **same line**
                 to: 'naveenramlu@gmail.com',
