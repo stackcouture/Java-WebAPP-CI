@@ -10,6 +10,11 @@ pipeline {
         string(name: 'BRANCH', defaultValue: 'main', description: 'Deployment branch for CD repo')
     }
 
+    environment {
+        SLACK_CHANNEL = '#all-jenkins'
+        SLACK_TOKEN = credentials('slack-token')
+    }
+
     tools {
         jdk 'Jdk17'
         maven 'Maven3'
@@ -181,6 +186,12 @@ pipeline {
                     """, // closing triple-quote and comma must be on the **same line**
                 to: 'naveenramlu@gmail.com',
                 mimeType: 'text/html'
+            )
+
+            slackSend(
+                channel: env.SLACK_CHANNEL,
+                message: "Deployment succeeded in ${env.JOB_NAME} - Build #${env.COMMIT_SHA}",
+                token: env.SLACK_TOKEN
             )
         }
     }
