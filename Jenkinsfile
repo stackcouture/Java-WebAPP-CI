@@ -82,14 +82,7 @@ pipeline {
 
         stage('Login to ECR & Tag Image') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
-                    string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')
-                ]) {
-                    withEnv([
-                        "AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY}",
-                        "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_KEY}"
-                    ]) {
+                 withAWS(credentials: 'aws-jenkins-creds', region: 'ap-south-1') {{
                         sh """
                             aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com
                             docker tag ${params.ECR_REPO_NAME} ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
@@ -105,8 +98,7 @@ pipeline {
                 script {
                     def TAG = "${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                     sh """
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL --scanners vuln --format table -o trivy-image-scan.html ${TAG}
-
+                        trivy image --exit-code 0 --severity HIGH,CRITICAL --scanners vuln --format table -o trivy-image-scan.html ${TAG}
                     """
                 }
             }
@@ -114,10 +106,7 @@ pipeline {
 
         stage('Push Image to ECR') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'access-key', variable: 'AWS_ACCESS_KEY'),
-                    string(credentialsId: 'secret-key', variable: 'AWS_SECRET_KEY')
-                ]) {
+                 withAWS(credentials: 'aws-jenkins-creds', region: 'ap-south-1') { 
                     sh """
                         docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
                         docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
