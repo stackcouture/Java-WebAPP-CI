@@ -31,7 +31,7 @@ pipeline {
         stage('Get Commit SHA') {
             steps {
                 script {
-                    env.COMMIT_SHA = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                     echo "Using commit SHA: ${env.COMMIT_SHA}"
                 }
             }
@@ -130,7 +130,7 @@ pipeline {
                     usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')
                 ]) {
                     script {
-                        def imageTag = ${env.COMMIT_SHA}
+                        def imageTag = env.COMMIT_SHA
                         def branch = params.BRANCH
                         def repoDir = 'Java-WebAPP-CD'
 
