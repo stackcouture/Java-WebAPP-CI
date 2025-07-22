@@ -142,6 +142,14 @@ pipeline {
             }
         }
 
+        stage('Deploy') {
+            steps {
+                withMaven(globalMavenSettingsConfig: 'maven-nexus', jdk: '', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
+                    sh 'mvn deploy -DskipTests=true'
+                }
+            }
+        }
+        
         stage('Confirm YAML Update') {
             when {
                 expression { return params.BRANCH == 'main' }
