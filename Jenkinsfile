@@ -103,9 +103,10 @@ pipeline {
        stage('Trivy Image Scan') {
             steps {
                 script {
-                    def ecrImageFullTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                    def TAG = "${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                     sh """
-                        trivy image --exit-code 1 --severity HIGH,CRITICAL --format table -o trivy-image-scan.html ${ecrImageFullTag}
+                        trivy image --exit-code 1 --severity HIGH,CRITICAL --scanners vuln --format table -o trivy-image-scan.html ${TAG}
+
                     """
                 }
             }
