@@ -194,22 +194,25 @@ pipeline {
             //     token: env.SLACK_TOKEN,
             //     color: 'good'
             // )
-            slackSend(
-                channel: env.SLACK_CHANNEL,
-                token: env.SLACK_TOKEN,
-                color: 'good',
-                message: """\
-                    *✅ Deployment Successful!*
-                    *Project:* `${env.JOB_NAME}`
-                    *Commit:* `${env.COMMIT_SHA}`
-                    *Build Number:* #${env.BUILD_NUMBER}
-                    *Branch:* `${env.GIT_BRANCH}`
-                    *Triggered By:* ${env.BUILD_USER} 👤
-                    *Build URL:* <${env.BUILD_URL}|Click to view in Jenkins>
+            
+            wrap([$class: 'BuildUser']) {
+                slackSend(
+                    channel: env.SLACK_CHANNEL,
+                    token: env.SLACK_TOKEN,
+                    color: 'good',
+                    message: """\
+                        *✅ Deployment Successful!*
+                        *Project:* `${env.JOB_NAME}`
+                        *Commit:* `${env.COMMIT_SHA}`
+                        *Build Number:* #${env.BUILD_NUMBER}
+                        *Branch:* `${env.GIT_BRANCH}`
+                        *Triggered By:* ${BUILD_USER} 👤
+                        *Build URL:* <${env.BUILD_URL}|Click to view in Jenkins>
 
-                    _This is an automated notification from Jenkins 🤖_
-                    """
-            )
+                        _This is an automated notification from Jenkins 🤖_
+                        """
+                )
+            }
         }
     }
 }
