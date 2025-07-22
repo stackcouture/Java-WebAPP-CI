@@ -28,10 +28,11 @@ pipeline {
             }
         }
 
-         stage('Checkout Code') {
+        stage('Get Commit SHA') {
             steps {
                 script {
                     env.COMMIT_SHA = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
+                    echo "Using commit SHA: ${env.COMMIT_SHA}"
                 }
             }
          }
