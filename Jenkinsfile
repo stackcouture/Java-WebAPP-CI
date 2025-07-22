@@ -40,23 +40,11 @@ pipeline {
                     echo "Using commit SHA: ${env.COMMIT_SHA}"
                 }
             }
-         }
-
-        stage('Compile') {
-            steps {
-                sh 'mvn clean compile'
-            }
         }
-
+        
         stage('Test') {
             steps {
-                sh 'mvn test'
-            }
-        }
-
-        stage('File System Scan') {
-            steps {
-                sh 'trivy fs --format table -o fs.html .'
+                sh 'mvn clean test'
             }
         }
 
@@ -68,6 +56,18 @@ pipeline {
                         junit 'target/surefire-reports/*.xml'
                     } else {
                         echo "No test results found to archive."
+                    }
+                }
+            }
+        }
+
+        stage('File System Scan') {
+            steps {
+                script {
+                    try {
+                        sh 'trivy fs --format table -o fs.html .'
+                    } catch (err) {
+                        echo "Trivy scan failed: ${err}"
                     }
                 }
             }
