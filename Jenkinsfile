@@ -170,10 +170,10 @@ pipeline {
                         }
                     }
                 }
-                stage('OWASP Dependency Check') {
+              stage('OWASP Dependency Check') {
                     steps {
                         script {
-                            // Define the report directory and report file names
+                            // Define the report directory and file names
                             def reportDir = "reports/owasp/${env.BUILD_NUMBER}"
                             def jsonFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.json"
                             def htmlFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.html"
@@ -181,29 +181,27 @@ pipeline {
                             // Run OWASP Dependency Check using Maven
                             sh """
                                 mkdir -p ${reportDir}
-                                mvn clean verify -Ddependency-check.skip=false -Ddependency-check.outputDirectory=${reportDir}
+                                mvn clean verify -Ddependency-check.skip=false -Ddependency-check.outputDirectory=${reportDir} -DfailOnCVSS=6.9
                             """
 
-                            // Check if the report files are generated
+                            // Check if the report files were generated
                             sh "ls -alh ${reportDir}"
 
                             // Publish the HTML report to Jenkins
                             publishHTML(target: [
-                                allowMissing: true,  // Allow missing reports (for example, if no vulnerabilities)
+                                allowMissing: true, 
                                 alwaysLinkToLastBuild: true,
-                                keepAll: true,  // Keep all previous reports
+                                keepAll: true,  
                                 reportDir: reportDir,
-                                reportFiles: htmlFile.replace("${reportDir}/", ""),  // Remove the base reportDir path from the file path
+                                reportFiles: htmlFile.replace("${reportDir}/", ""),  
                                 reportName: "OWASP Dependency Check - Build ${env.BUILD_NUMBER}"
                             ])
 
-                            // Archive the artifacts (JSON and HTML reports) for future reference
+                            // Archive the JSON and HTML reports
                             archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
                         }
                     }
-                }
-
-
+                }   
             }
         }
 

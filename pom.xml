@@ -74,10 +74,10 @@
                 </execution>
             </executions>
             <configuration>
-                <format>HTML</format> <!-- You can also generate JSON or XML -->
+                <format>HTML</format> 
                 <outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory>
-                <skip>false</skip> <!-- Ensures Dependency Check is not skipped -->
-                <failBuildOnCVSS>7</failBuildOnCVSS> <!-- Optional: Fail the build if CVSS score > 7 -->
+                <skip>false</skip> 
+                <failBuildOnCVSS>6.9</failBuildOnCVSS> 
             </configuration>
         </plugin>
     </plugins>
