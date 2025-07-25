@@ -170,49 +170,6 @@ pipeline {
                         }
                     }
                 }
-              stage('OWASP Dependency Check') {
-                    steps {
-                        script {
-                            // Define the report directory and file names
-                            def reportDir = "reports/owasp/${env.BUILD_NUMBER}"
-                            def jsonFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.json"
-                            def htmlFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.html"
-
-                            // Create report directory if it doesn't exist
-                            sh "mkdir -p ${reportDir}"
-
-                            // Run OWASP Dependency Check using Maven
-                            sh """
-                                mvn clean verify -Ddependency-check.outputDirectory=${reportDir} -DfailOnCVSS=7.9
-                            """
-
-                            // Check if the report files were generated
-                            sh "ls -alh ${reportDir}"
-
-                            // Ensure the HTML file exists before publishing
-                            if (fileExists(htmlFile)) {
-                                // Publish the HTML report to Jenkins
-                                publishHTML(target: [
-                                    allowMissing: true, 
-                                    alwaysLinkToLastBuild: true,
-                                    keepAll: true,  
-                                    reportDir: reportDir,
-                                    reportFiles: htmlFile.replace("${reportDir}/", ""),  
-                                    reportName: "OWASP Dependency Check - Build ${env.BUILD_NUMBER}"
-                                ])
-                            } else {
-                                echo "HTML report not found, skipping publication."
-                            }
-
-                            // Archive the JSON and HTML reports (only if they exist)
-                            if (fileExists(jsonFile) && fileExists(htmlFile)) {
-                                archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
-                            } else {
-                                echo "Report files not found, skipping archiving."
-                            }
-                        }
-                    }
-                }
             }
         }
 

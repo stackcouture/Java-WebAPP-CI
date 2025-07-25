@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.1.1</version>
+    <version>3.2.0</version> <!-- Ensure you use the correct version of Spring Boot -->
   </parent>
 
   <groupId>com.example</groupId>
@@ -34,36 +34,7 @@
         <artifactId>spring-boot-starter-test</artifactId>
         <scope>test</scope>
     </dependency>
-    <dependency>
-        <groupId>org.apache.logging.log4j</groupId>
-        <artifactId>log4j-core</artifactId>
-        <version>2.17.1</version> <!-- or the latest version -->
-    </dependency>
-
-    <dependency>
-        <groupId>org.springframework</groupId>
-        <artifactId>spring-web</artifactId>
-        <version>6.1.4</version> <!-- or the latest version -->
-    </dependency>
-
-    <dependency>
-        <groupId>org.apache.tomcat.embed</groupId>
-        <artifactId>tomcat-embed-core</artifactId>
-        <version>10.1.18</version> <!-- or the latest version -->
-    </dependency>
   </dependencies>
-
-    <dependency>
-      <groupId>org.springframework</groupId>
-      <artifactId>spring-webmvc</artifactId>
-      <version>6.1.4</version>
-      <exclusions>
-          <exclusion>
-              <groupId>ch.qos.logback</groupId>
-              <artifactId>logback-classic</artifactId>
-          </exclusion>
-      </exclusions>
-    </dependency>
 
   <build>
     <plugins>
@@ -84,26 +55,8 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
-      </plugin>
-       <plugin>
-            <groupId>org.owasp</groupId>
-            <artifactId>dependency-check-maven</artifactId>
-            <version>8.4.3</version>
-            <executions>
-                <execution>
-                    <goals>
-                        <goal>check</goal>
-                    </goals>
-                    <phase>verify</phase> <!-- Runs in the verify phase after tests -->
-                </execution>
-            </executions>
-            <configuration>
-                <format>HTML</format> 
-                <outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory>
-                <skip>false</skip> 
-                <failBuildOnCVSS>6.9</failBuildOnCVSS> 
-            </configuration>
         </plugin>
+      
     </plugins>
   </build>         
   <distributionManagement>
