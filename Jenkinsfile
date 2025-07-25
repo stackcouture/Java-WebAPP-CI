@@ -69,6 +69,25 @@ pipeline {
             }
         }
 
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+	               sh ''' 
+                		mvn clean verify sonar:sonar \
+                		-Dsonar.projectKey=Java-App
+	                   '''
+                    }
+            }
+        }
+
+        stage('Quality Gates') {
+            steps {
+                script {
+                        waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                    }	
+                }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t ${params.ECR_REPO_NAME} ."
@@ -188,6 +207,30 @@ pipeline {
                             docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
                         """
                         }
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                withMaven(globalMavenSettingsConfig: 'maven-setting-javaapp', jdk: 'Jdk17', maven: 'Maven3', mavenSettingsConfig: '', traceability: true) {
+                    sh 'mvn deploy -DskipTests=true'
+                }
+            }
+        }
+
+        stage('Confirm YAML Update') {
+            when {
+                expression { return params.BRANCH == 'dev' }
+            }
+            steps {
+                script {
+                    def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
+                        choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
+                    ]
+                    if (confirm == 'No') {
+                        error 'Aborted by user.'
                     }
                 }
             }
