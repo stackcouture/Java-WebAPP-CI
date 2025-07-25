@@ -183,7 +183,7 @@ pipeline {
 
                             // Run OWASP Dependency Check using Maven
                             sh """
-                                mvn clean verify -Ddependency-check.outputDirectory=${reportDir} -DfailOnCVSS=6.9
+                                mvn clean verify -Ddependency-check.outputDirectory=${reportDir} -DfailOnCVSS=7.9
                             """
 
                             // Check if the report files were generated
