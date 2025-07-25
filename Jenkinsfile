@@ -21,7 +21,7 @@ pipeline {
     }
 
     stages {
-        
+
         stage('Clean Workspace') {
             steps {
                 cleanWs()
@@ -177,19 +177,14 @@ pipeline {
                             def jsonFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.json"
                             def htmlFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.html"
 
-                            // Run the OWASP Dependency Check with Maven
+                            // Run OWASP Dependency Check using Maven
                             sh """
                                 mkdir -p ${reportDir}
                                 mvn clean verify -Ddependency-check.skip=false -Ddependency-check.outputDirectory=${reportDir}
                             """
 
-                            // Convert JSON to HTML (if needed)
-                            sh """
-                                # Convert the generated JSON to an HTML report
-                                echo "<html><body><pre>" > ${htmlFile}
-                                cat ${jsonFile} | jq . >> ${htmlFile}
-                                echo "</pre></body></html>" >> ${htmlFile}
-                            """
+                            // Check if the report files are generated
+                            sh "ls -alh ${reportDir}"
 
                             // Publish the HTML report to Jenkins
                             publishHTML(target: [
@@ -201,7 +196,7 @@ pipeline {
                                 reportName: "OWASP Dependency Check - Build ${env.BUILD_NUMBER}"
                             ])
 
-                            // Archive the artifacts
+                            // Archive the artifacts (JSON and HTML reports)
                             archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
                         }
                     }
