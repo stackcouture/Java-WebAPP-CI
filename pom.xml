@@ -34,6 +34,11 @@
         <artifactId>spring-boot-starter-test</artifactId>
         <scope>test</scope>
     </dependency>
+    <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-core</artifactId>
+        <version>2.16.0</version> <!-- Patched version -->
+    </dependency>
   </dependencies>
 
   <build>
@@ -55,6 +60,25 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+       <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>8.4.3</version>
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                    <phase>verify</phase> <!-- Runs in the verify phase after tests -->
+                </execution>
+            </executions>
+            <configuration>
+                <format>HTML</format> <!-- You can also generate JSON or XML -->
+                <outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory>
+                <skip>false</skip> <!-- Ensures Dependency Check is not skipped -->
+                <failBuildOnCVSS>7</failBuildOnCVSS> <!-- Optional: Fail the build if CVSS score > 7 -->
+            </configuration>
         </plugin>
     </plugins>
   </build>         
