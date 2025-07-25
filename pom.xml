@@ -56,6 +56,24 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         </plugin>
+      <!-- OWASP Dependency Check Plugin -->
+        <plugin>
+            <groupId>org.owasp</groupId>
+            <artifactId>dependency-check-maven</artifactId>
+            <version>8.4.3</version> <!-- Or whichever latest version you want to use -->
+            <executions>
+                <execution>
+                    <goals>
+                        <goal>check</goal>
+                    </goals>
+                    <phase>verify</phase> <!-- Run during the verify phase -->
+                </execution>
+            </executions>
+            <configuration>
+                <format>HTML</format> <!-- You can use HTML, JSON, or XML -->
+                <outputDirectory>${project.build.directory}/dependency-check-report</outputDirectory> <!-- Report directory -->
+            </configuration>
+        </plugin>
     </plugins>
   </build>         
   <distributionManagement>

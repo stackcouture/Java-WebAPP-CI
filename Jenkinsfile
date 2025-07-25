@@ -21,6 +21,7 @@ pipeline {
     }
 
     stages {
+        
         stage('Clean Workspace') {
             steps {
                 cleanWs()
@@ -125,7 +126,6 @@ pipeline {
                         }
                     }
                 }
-
                 stage('Snyk Image Scan') {
                     environment {
                         SNYK_TOKEN = credentials('SNYK_TOKEN')
@@ -170,6 +170,42 @@ pipeline {
                         }
                     }
                 }
+                stage('OWASP Dependency Check') {
+                    steps {
+                        script {
+                            def reportDir = "reports/owasp/${env.BUILD_NUMBER}"
+                            def jsonFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.json"
+                            def htmlFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.html"
+
+                            // Run the OWASP Dependency Check with Maven
+                            sh """
+                                mkdir -p ${reportDir}
+                                mvn clean verify -Ddependency-check.skip=false -Ddependency-check.outputDirectory=${reportDir}
+                            """
+
+                            // Convert JSON to HTML (if needed)
+                            sh """
+                                # Convert the generated JSON to an HTML report
+                                echo "<html><body><pre>" > ${htmlFile}
+                                cat ${jsonFile} | jq . >> ${htmlFile}
+                                echo "</pre></body></html>" >> ${htmlFile}
+                            """
+
+                            // Publish the HTML report to Jenkins
+                            publishHTML(target: [
+                                allowMissing: true,
+                                alwaysLinkToLastBuild: true,
+                                keepAll: true,
+                                reportDir: reportDir,
+                                reportFiles: htmlFile.replace("${reportDir}/", ""),
+                                reportName: "OWASP Dependency Check - Build ${env.BUILD_NUMBER}"
+                            ])
+
+                            // Archive the artifacts
+                            archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
+                        }
+                    }
+                }
             }
         }
 
@@ -182,13 +218,13 @@ pipeline {
                         secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
                  ]]) {
                 retry(2) {
-                    timeout(time: 5, unit: 'MINUTES') {
-                    sh """
-                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
-                        docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
-                    """
+                        timeout(time: 5, unit: 'MINUTES') {
+                        sh """
+                            docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}
+                            docker push ${params.AWS_ACCOUNT_ID}.dkr.ecr.ap-south-1.amazonaws.com/${params.ECR_REPO_NAME}:latest
+                        """
+                        }
                     }
-                }
                 }
             }
         }
@@ -206,39 +242,39 @@ pipeline {
                     sh "git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/stackcouture/Java-WebAPP-CD.git ${repoDir}"
 
                     dir(repoDir) {
-                    sh "git checkout ${branch}"
+                        sh "git checkout ${branch}"
 
-                    // Check if file exists
-                    if (!fileExists("java-app-chart/values.yaml")) {
-                        error("File java-app-chart/values.yaml not found in branch ${branch}")
+                        // Check if file exists
+                        if (!fileExists("java-app-chart/values.yaml")) {
+                            error("File java-app-chart/values.yaml not found in branch ${branch}")
+                        }
+
+                        // Optional safety check
+                        def tagExists = sh(script: "grep -q '^\\s*tag:' java-app-chart/values.yaml && echo found || echo notfound", returnStdout: true).trim()
+                        if (tagExists != 'found') {
+                            error("Could not find 'tag:' field in values.yaml — aborting.")
+                        }
+
+                        // Update the tag
+                        sh """
+                            sed -i -E "s|(^\\s*tag:\\s*\\\").*(\\\")|\\1${imageTag}\\2|" java-app-chart/values.yaml
+                        """
+
+                        // Git config + commit
+                        sh 'git config user.email "naveenramlu@gmail.com"'
+                        sh 'git config user.name "Naveen"'
+                        sh 'git add java-app-chart/values.yaml'
+
+                            def changes = sh(script: 'git diff --cached --quiet || echo "changed"', returnStdout: true).trim()
+                            if (changes == "changed") {
+                                echo "Changes detected — committing and pushing."
+                                sh "git commit -m 'chore: update image tag to ${imageTag}'"
+                                sh "git push origin ${branch}"
+                            } else {
+                                echo "No changes detected — skipping commit."
+                            }
+                        }
                     }
-
-                    // Optional safety check
-                    def tagExists = sh(script: "grep -q '^\\s*tag:' java-app-chart/values.yaml && echo found || echo notfound", returnStdout: true).trim()
-                    if (tagExists != 'found') {
-                        error("Could not find 'tag:' field in values.yaml — aborting.")
-                    }
-
-                    // Update the tag
-                    sh """
-                        sed -i -E "s|(^\\s*tag:\\s*\\\").*(\\\")|\\1${imageTag}\\2|" java-app-chart/values.yaml
-                    """
-
-                    // Git config + commit
-                    sh 'git config user.email "naveenramlu@gmail.com"'
-                    sh 'git config user.name "Naveen"'
-                    sh 'git add java-app-chart/values.yaml'
-
-                    def changes = sh(script: 'git diff --cached --quiet || echo "changed"', returnStdout: true).trim()
-                    if (changes == "changed") {
-                        echo "Changes detected — committing and pushing."
-                        sh "git commit -m 'chore: update image tag to ${imageTag}'"
-                        sh "git push origin ${branch}"
-                    } else {
-                        echo "No changes detected — skipping commit."
-                    }
-                    }
-                }
                 }
             }
         }
@@ -256,6 +292,7 @@ post {
                 }
             }
         }
+
         success {
             script {
                 def SHORT_SHA = env.COMMIT_SHA.take(7)
@@ -293,6 +330,7 @@ post {
                 }
             }
         }
+
         failure {
             script {
                  wrap([$class: 'BuildUser']) {
@@ -314,6 +352,7 @@ post {
                 }
             }
         }
+
         unstable {
             script {
                  wrap([$class: 'BuildUser']) {
