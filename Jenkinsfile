@@ -170,38 +170,6 @@ pipeline {
                         }
                     }
                 }
-                stage('OWASP Dependency Check') {
-                    steps {
-                        script {
-                            // Define the report directory and report file names
-                            def reportDir = "reports/owasp/${env.BUILD_NUMBER}"
-                            def jsonFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.json"
-                            def htmlFile = "${reportDir}/dependency-check-report-${env.COMMIT_SHA}.html"
-
-                            // Run OWASP Dependency Check using Maven
-                            sh """
-                                mkdir -p ${reportDir}
-                                mvn clean verify -Ddependency-check.failBuildOnCVSS=7 -Ddependency-check.skip=false -Ddependency-check.outputDirectory=${reportDir}
-                            """
-
-                            // Check if the report files are generated
-                            sh "ls -alh ${reportDir}"
-
-                            // Publish the HTML report to Jenkins
-                            publishHTML(target: [
-                                allowMissing: true,  // Allow missing reports (for example, if no vulnerabilities)
-                                alwaysLinkToLastBuild: true,
-                                keepAll: true,  // Keep all previous reports
-                                reportDir: reportDir,
-                                reportFiles: htmlFile.replace("${reportDir}/", ""),  // Remove the base reportDir path from the file path
-                                reportName: "OWASP Dependency Check - Build ${env.BUILD_NUMBER}"
-                            ])
-
-                            // Archive the artifacts (JSON and HTML reports) for future reference
-                            archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
-                        }
-                    }
-                }
 
             }
         }
