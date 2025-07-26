@@ -205,20 +205,107 @@ pipeline {
             }
         }
 
+//         stage('AI-Powered GPT Report') {
+//             steps {
+//                  withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+
+//                  script {
+//                         def reportDir = "reports/ai/${env.BUILD_NUMBER}"
+//                         def gptReport = "${reportDir}/gpt-security-summary-${env.COMMIT_SHA}.html"
+
+//                         def snykJsonFile = findFiles(glob: "reports/snyk/${env.BUILD_NUMBER}/**/snyk-report-${env.COMMIT_SHA}.json")[0].path
+//                         def trivyJsonFile = findFiles(glob: "reports/trivy/${env.BUILD_NUMBER}/**/trivy-image-scan-${env.COMMIT_SHA}.json")[0].path
+
+//                         sh """
+//                             mkdir -p ${reportDir}
+//                         """
+                        
+//                         def snykJson = sh(script: "cat ${snykJsonFile} | jq -c .", returnStdout: true).trim()
+//                         def trivyJson = sh(script: "cat ${trivyJsonFile} | jq -c .", returnStdout: true).trim()
+
+//                         def prompt = """
+//                         You are a DevSecOps expert. Generate a professional HTML report summarizing the following scan results. Include key CVEs, severities, affected packages, and remediation guidance.
+
+//                         === Trivy Scan ===
+//                         ${trivyJson}
+
+//                         === Snyk Scan ===
+//                         ${snykJson}
+//                         """
+
+//                         def escapedPrompt = prompt.replace("\"", "\\\"").replace("\n", "\\n")
+
+//                         def escapedPrompt = prompt.replace('"', '\\"')
+
+// sh """
+//     curl -s https://api.openai.com/v1/chat/completions \\
+//       -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
+//       -H "Content-Type: application/json" \\
+//       -d '{ 
+//         "model": "gpt-4",
+//         "temperature": 0.4,
+//         "messages": [{"role": "user", "content": "${escapedPrompt}"}]
+//       }' | jq -r '.choices[0].message.content' > ${gptReport}
+// """
+
+//                  }
+//                  }
+//             }
+        
+//         }
+
         stage('AI-Powered GPT Report') {
             steps {
                 withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
                     script {
                         def reportDir = "reports/ai/${env.BUILD_NUMBER}"
                         def gptReport = "${reportDir}/gpt-security-summary-${env.COMMIT_SHA}.html"
-                        def snykJson = findFiles(glob: "reports/snyk/${env.BUILD_NUMBER}/**/snyk-report-${env.COMMIT_SHA}.json")[0].path
-                        def trivyJson = findFiles(glob: "reports/trivy/${env.BUILD_NUMBER}/**/trivy-image-scan-${env.COMMIT_SHA}.json")[0].path
+                        def payloadFile = "${reportDir}/gpt-payload.json"
 
-                        sh """
-                            mkdir -p ${reportDir}
-                            python3 scripts/generate_gpt_report.py ${trivyJson} ${snykJson} ${gptReport}
+                        def snykJsonFile = findFiles(glob: "reports/snyk/${env.BUILD_NUMBER}/**/snyk-report-${env.COMMIT_SHA}.json")[0].path
+                        def trivyJsonFile = findFiles(glob: "reports/trivy/${env.BUILD_NUMBER}/**/trivy-image-scan-${env.COMMIT_SHA}.json")[0].path
+
+                        sh "mkdir -p ${reportDir}"
+
+                        def snykJson = sh(script: "cat ${snykJsonFile} | jq -c .", returnStdout: true).trim()
+                        def trivyJson = sh(script: "cat ${trivyJsonFile} | jq -c .", returnStdout: true).trim()
+
+                        def prompt = """
+                        You are a DevSecOps expert. Generate a professional HTML report summarizing the following scan results. Include key CVEs, severities, affected packages, and remediation guidance.
+
+                        === Trivy Scan ===
+                        ${trivyJson}
+
+                        === Snyk Scan ===
+                        ${snykJson}
                         """
 
+                        // Escape for JSON payload
+                        def escapedPrompt = prompt.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+
+                        // Write payload to a JSON file
+                        writeFile file: payloadFile, text: """
+                        {
+                        "model": "gpt-4",
+                        "temperature": 0.4,
+                        "messages": [
+                            {
+                            "role": "user",
+                            "content": "${escapedPrompt}"
+                            }
+                        ]
+                        }
+                        """
+
+                        // Call OpenAI API and generate report
+                        sh """
+                            curl -s https://api.openai.com/v1/chat/completions \\
+                            -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
+                            -H "Content-Type: application/json" \\
+                            -d @${payloadFile} | jq -r '.choices[0].message.content' > ${gptReport}
+                        """
+
+                        // Publish report in Jenkins UI
                         publishHTML(target: [
                             allowMissing: true,
                             alwaysLinkToLastBuild: true,
@@ -227,14 +314,12 @@ pipeline {
                             reportFiles: "gpt-security-summary-${env.COMMIT_SHA}.html",
                             reportName: "AI-Powered GPT Security Summary"
                         ])
-                        
-                        // Save path for email stage
+
                         env.GPT_REPORT_PATH = gptReport
                     }
                 }
             }
         }
-
 
         stage('Update YAML File - FINAL') {
             steps {
@@ -281,7 +366,7 @@ pipeline {
             }
         }
 
-
+        
         stage('Cleanup Local Image Tags') {
             steps {
                 sh """
@@ -291,6 +376,7 @@ pipeline {
             }
         }
     }
+
 
     post {
         always {
@@ -334,9 +420,11 @@ def runSnykScan(stageName, imageTag) {
     def jsonFile = "${reportDir}/snyk-report-${env.COMMIT_SHA}.json"
     def htmlFile = "${reportDir}/snyk-report-${env.COMMIT_SHA}.html"
 
-    withEnv(["SNYK_TOKEN=${env.SNYK_TOKEN}"]) {
+    withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
+    // withEnv(["SNYK_TOKEN=${env.SNYK_TOKEN}"]) {
         sh """
             mkdir -p ${reportDir}
+
             snyk auth $SNYK_TOKEN
             snyk container test ${imageTag} --severity-threshold=high --json > ${jsonFile} || true
 
