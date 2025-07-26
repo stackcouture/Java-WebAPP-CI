@@ -24,7 +24,7 @@ USER spring:spring
 WORKDIR /home/spring
 
 # Copy only the final JAR from builder stage
-COPY --from=builder /app/target/app.jar app.jar
+COPY --chown=spring:spring --from=builder /app/target/app.jar app.jar
 
 # Health check to ensure the app is responding
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
