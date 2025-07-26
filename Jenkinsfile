@@ -55,6 +55,45 @@ pipeline {
                     def sbomFile = 'target/bom.xml'
                     if (fileExists(sbomFile)) {
                         archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+                        echo "✅ SBOM archived: ${sbomFile}"
+                    }
+                    else {
+                        error "❌ SBOM not found: ${sbomFile}"
+                    }
+                }
+            }
+        }
+
+        stage('Upload SBOM to Dependency-Track') {
+            steps {
+                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+                    script {
+                        def sbomFile = 'target/bom.xml'
+                        if (!fileExists(sbomFile)) {
+                            error "❌ SBOM file not found: ${sbomFile}"
+                        }
+
+                        def projectName = "${params.ECR_REPO_NAME}"
+                        def projectVersion = "${env.COMMIT_SHA}"
+                        def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
+
+                        echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
+
+                        withEnv([
+                            "DEPTRACK_URL=${dependencyTrackUrl}",
+                            "PROJECT_NAME=${projectName}",
+                            "PROJECT_VERSION=${projectVersion}"
+                        ]) {
+                            sh '''#!/bin/bash
+                                curl -X POST "$DEPTRACK_URL" \
+                                    -H "X-Api-Key: $DT_API_KEY" \
+                                    -H "Content-Type: multipart/form-data" \
+                                    -F "autoCreate=true" \
+                                    -F "projectName=$PROJECT_NAME" \
+                                    -F "projectVersion=$PROJECT_VERSION" \
+                                    -F "bom=@target/bom.xml"
+                            '''
+                        }
                     }
                 }
             }
@@ -211,39 +250,6 @@ pipeline {
             }
         }
 
-        stage('Upload SBOM to Dependency-Track') {
-            steps {
-                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
-                    script {
-                        def sbomFile = 'target/bom.xml'
-                        if (!fileExists(sbomFile)) {
-                            error "❌ SBOM file not found: ${sbomFile}"
-                        }
-
-                        def projectName = "${params.ECR_REPO_NAME}"
-                        def projectVersion = "${env.COMMIT_SHA}"
-                        def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
-
-                        echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
-
-                         sh '''
-                                curl -X POST "$DEPTRACK_URL" \
-                                    -H "X-Api-Key: $DT_API_KEY" \
-                                    -H "Content-Type: multipart/form-data" \
-                                    -F "autoCreate=true" \
-                                    -F "projectName=$PROJECT_NAME" \
-                                    -F "projectVersion=$PROJECT_VERSION" \
-                                    -F "bom=@target/bom.xml"
-                            ''',
-                            environment: [
-                                DEPTRACK_URL: dependencyTrackUrl,
-                                PROJECT_NAME: projectName,
-                                PROJECT_VERSION: projectVersion
-                            ]
-                    }
-                }
-            }
-        }
 
         stage('Cleanup Local Image Tags') {
             steps {
