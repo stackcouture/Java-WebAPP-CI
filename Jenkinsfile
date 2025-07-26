@@ -222,19 +222,24 @@ pipeline {
 
                         def projectName = "${params.ECR_REPO_NAME}"
                         def projectVersion = "${env.COMMIT_SHA}"
-                        def dependencyTrackUrl = 'http://13.233.157.56/:8081/api/v1/bom'
+                        def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
 
                         echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
 
-                        sh """
-                            curl -X POST "${dependencyTrackUrl}" \
-                                -H "X-Api-Key: ${DT_API_KEY}" \
-                                -H "Content-Type: multipart/form-data" \
-                                -F "autoCreate=true" \
-                                -F "projectName=${projectName}" \
-                                -F "projectVersion=${projectVersion}" \
-                                -F "bom=@${sbomFile}"
-                        """
+                         sh '''
+                                curl -X POST "$DEPTRACK_URL" \
+                                    -H "X-Api-Key: $DT_API_KEY" \
+                                    -H "Content-Type: multipart/form-data" \
+                                    -F "autoCreate=true" \
+                                    -F "projectName=$PROJECT_NAME" \
+                                    -F "projectVersion=$PROJECT_VERSION" \
+                                    -F "bom=@target/bom.xml"
+                            ''',
+                            environment: [
+                                DEPTRACK_URL: dependencyTrackUrl,
+                                PROJECT_NAME: projectName,
+                                PROJECT_VERSION: projectVersion
+                            ]
                     }
                 }
             }
