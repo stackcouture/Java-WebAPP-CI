@@ -34,20 +34,6 @@
         <artifactId>spring-boot-starter-test</artifactId>
         <scope>test</scope>
     </dependency>
-    <dependency>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-actuator</artifactId>
-    </dependency>
-    <dependency>
-        <groupId>org.springdoc</groupId>
-        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-        <version>2.5.0</version>
-    </dependency>
-    <dependency>
-        <groupId>org.springdoc</groupId>
-        <artifactId>springdoc-openapi-starter-actuator</artifactId>
-        <version>2.5.0</version>
-    </dependency>
   </dependencies>
 
   <build>
@@ -69,7 +55,8 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
-        </plugin>      
+        </plugin>
+      
     </plugins>
   </build>         
   <distributionManagement>
@@ -83,4 +70,3 @@
     </snapshotRepository>
 </distributionManagement>
 </project>
-
