@@ -219,6 +219,11 @@ def runTrivyScan(stageName, imageTag) {
     def htmlFile = "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.html"
     sh """
         mkdir -p ${reportDir}
+
+        # Download Trivy HTML template
+        mkdir -p contrib
+        curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+
         trivy image --format template --template "@contrib/html.tpl" -o ${htmlFile} ${imageTag}
     """
     publishHTML(target: [
