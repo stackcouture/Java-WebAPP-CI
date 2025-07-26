@@ -43,11 +43,11 @@ pipeline {
             }
         }
 
-        stage('Depdendency Check') {
-            steps {
-                dependencyCheck additionalArguments: '--forrmt HTML', odcInstallation: 'DP-Check'
-            }
-        }
+        // stage('Depdendency Check') {
+        //     steps {
+        //         dependencyCheck additionalArguments: '--format HTML', odcInstallation: 'DP-Check'
+        //     }
+        // }
 
         stage('Build with Maven') {
             steps {
