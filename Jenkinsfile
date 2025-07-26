@@ -301,19 +301,18 @@ pipeline {
                 } else {
                     echo "ℹNo test results found."
                 }
-            }
-        }
 
-        script {
-            if (fileExists(env.GPT_REPORT_PATH)) {
-                emailext(
-                    subject: "🛡️ AI Security Summary - Build ${env.BUILD_NUMBER}",
-                    body: "Attached is the GPT-generated security summary for build #${env.BUILD_NUMBER}.",
-                    to: "naveenramlu@gmail.com",
-                    attachmentsPattern: "${env.GPT_REPORT_PATH}"
-                )
-            } else {
-                echo "GPT Report not found — skipping email attachment."
+                  // ✅ Proper place for script block in post section
+                if (env.GPT_REPORT_PATH && fileExists(env.GPT_REPORT_PATH)) {
+                    emailext(
+                        subject: "🛡️ AI Security Summary - Build ${env.BUILD_NUMBER}",
+                        body: "Attached is the GPT-generated security summary for build #${env.BUILD_NUMBER}.",
+                        to: "naveenramlu@gmail.com",
+                        attachmentsPattern: "${env.GPT_REPORT_PATH}"
+                    )
+                } else {
+                    echo "GPT Report not found — skipping email attachment."
+                }
             }
         }
         // success {
