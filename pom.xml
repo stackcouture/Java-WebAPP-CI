@@ -70,7 +70,6 @@
         </executions>
       </plugin>
     </plugins>
-    </plugins>
   </build>         
   <distributionManagement>
     <repository>
