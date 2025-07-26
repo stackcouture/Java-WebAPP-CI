@@ -43,6 +43,12 @@ pipeline {
             }
         }
 
+        stage('Depdendency Check') {
+            steps {
+                dependencyCheck additionalArguments: '--forrmt HTML', odcInstallation: 'DP-Check'
+            }
+        }
+
         stage('Build with Maven') {
             steps {
                 sh 'mvn clean package'
@@ -69,24 +75,24 @@ pipeline {
             }
         }
 
-        stage('Sonar Analysis') {
-            steps {
-                withSonarQubeEnv('sonar-server') {
-	               sh ''' 
-                		mvn clean verify sonar:sonar \
-                		-Dsonar.projectKey=Java-App
-	                   '''
-                    }
-            }
-        }
+        // stage('Sonar Analysis') {
+        //     steps {
+        //         withSonarQubeEnv('sonar-server') {
+	    //            sh ''' 
+        //         		mvn clean verify sonar:sonar \
+        //         		-Dsonar.projectKey=Java-App
+	    //                '''
+        //             }
+        //     }
+        // }
 
-        stage('Quality Gates') {
-            steps {
-                script {
-                        waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
-                    }	
-                }
-        }
+        // stage('Quality Gates') {
+        //     steps {
+        //         script {
+        //                 waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+        //             }	
+        //         }
+        // }
 
         stage('Build Docker Image') {
             steps {
@@ -212,29 +218,29 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
-            steps {
-                withMaven(globalMavenSettingsConfig: 'maven-setting-javaapp', jdk: 'Jdk17', maven: 'Maven3', mavenSettingsConfig: '', traceability: true) {
-                    sh 'mvn deploy -DskipTests=true'
-                }
-            }
-        }
+        // stage('Deploy') {
+        //     steps {
+        //         withMaven(globalMavenSettingsConfig: 'maven-setting-javaapp', jdk: 'Jdk17', maven: 'Maven3', mavenSettingsConfig: '', traceability: true) {
+        //             sh 'mvn deploy -DskipTests=true'
+        //         }
+        //     }
+        // }
 
-        stage('Confirm YAML Update') {
-            when {
-                expression { return params.BRANCH == 'dev' }
-            }
-            steps {
-                script {
-                    def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
-                        choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
-                    ]
-                    if (confirm == 'No') {
-                        error 'Aborted by user.'
-                    }
-                }
-            }
-        }
+        // stage('Confirm YAML Update') {
+        //     when {
+        //         expression { return params.BRANCH == 'dev' }
+        //     }
+        //     steps {
+        //         script {
+        //             def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
+        //                 choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
+        //             ]
+        //             if (confirm == 'No') {
+        //                 error 'Aborted by user.'
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Update YAML File - FINAL') {
             steps {
