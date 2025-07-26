@@ -12,7 +12,6 @@ pipeline {
     environment {
         SLACK_CHANNEL = '#all-jenkins'
         SLACK_TOKEN = credentials('slack-token')
-        COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
         REGION = 'ap-south-1'
         SNYK_TOKEN = credentials('SNYK_TOKEN')
     }
@@ -36,14 +35,13 @@ pipeline {
             }
         }
 
-        // stage('Get Commit SHA') {
-        //     steps {
-        //         script {
-        //             env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-        //             echo "Using commit SHA: ${env.COMMIT_SHA}"
-        //         }
-        //     }
-        // }
+        stage('Commit SHA') {
+            steps {
+                script {
+                    env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                }
+            }
+        }
 
         stage('Build + Test + SBOM') {
             steps {
@@ -62,21 +60,25 @@ pipeline {
             }
         }
 
-        stage('File System Scan') {
+        stage('Prepare Trivy Template') {
+            steps {
+                sh """
+                    mkdir -p contrib
+                    curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+                """
+            }
+        }
+
+        stage('Trivy File System Scan') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
             steps {
                 script {
                     try {
-                        sh 'trivy fs --format table -o fs.html .'
-                        publishHTML(target: [
-                            allowMissing: true,
-                            alwaysLinkToLastBuild: true,
-                            keepAll: true,
-                            reportDir: '.',
-                            reportFiles: 'fs.html',
-                            reportName: 'Trivy Filesystem Scan'
-                        ])
+                        runTrivyScanUnified("filesystem-scan",".", "fs")
                     } catch (err) {
-                        echo "Trivy scan failed: ${err}"
+                        echo "Trivy File System Scan failed: ${err}"
                     }
                 }
             }
@@ -91,14 +93,20 @@ pipeline {
         stage('Security Scans Before Push') {
             parallel {
                 stage('Trivy Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
                     steps {
                         script {
                             def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runTrivyScan("before-push", localTag)
+                            runTrivyScanUnified("before-push", localTag, "image")
                         }
                     }
                 }
                 stage('Snyk Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
                     steps {
                         script {
                             def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
@@ -134,14 +142,20 @@ pipeline {
         stage('Security Scans After Push') {
             parallel {
                 stage('Trivy After Push') {
+                     options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
                     steps {
                         script {
                             def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runTrivyScan("after-push", pushedTag)
+                            runTrivyScanUnified("after-push", pushedTag, "image")
                         }
                     }
                 }
                 stage('Snyk After Push') {
+                     options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
                     steps {
                         script {
                             def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
@@ -196,6 +210,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Cleanup Local Image Tags') {
+            steps {
+                sh """
+                    docker rmi ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} || true
+                    docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA} || true
+                """
+            }
+        }
     }
 
     post {
@@ -221,29 +244,6 @@ pipeline {
                 body: "Build ${env.BUILD_NUMBER} for commit ${env.COMMIT_SHA} failed. Please check: ${env.BUILD_URL}"
         }
     }
-}
-
-def runTrivyScan(stageName, imageTag) {
-    def reportDir = "reports/trivy/${env.BUILD_NUMBER}/${stageName}"
-    def htmlFile = "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.html"
-    sh """
-        mkdir -p ${reportDir}
-
-        # Download Trivy HTML template
-        mkdir -p contrib
-        curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
-
-        trivy image --format template --template "@contrib/html.tpl" -o ${htmlFile} ${imageTag}
-    """
-    publishHTML(target: [
-        allowMissing: true,
-        alwaysLinkToLastBuild: true,
-        keepAll: true,
-        reportDir: reportDir,
-        reportFiles: "*.html",
-        reportName: "Trivy Image Scan (${stageName}) - Build ${env.BUILD_NUMBER}"
-    ])
-    archiveArtifacts artifacts: "${reportDir}/*.html", allowEmptyArchive: true
 }
 
 def runSnykScan(stageName, imageTag) {
@@ -273,3 +273,27 @@ def runSnykScan(stageName, imageTag) {
     ])
     archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
 }
+
+def runTrivyScanUnified(stageName, scanTarget, scanType) {
+    def reportDir = "reports/trivy/${env.BUILD_NUMBER}/${stageName}"
+    def reportFile = scanType == 'fs' 
+        ? "${reportDir}/trivy-fs-scan-${env.COMMIT_SHA}.html"
+        : "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.html"
+
+    sh """
+        mkdir -p ${reportDir}
+        trivy ${scanType} --format template --template "@contrib/html.tpl" -o ${reportFile} ${scanTarget}
+    """
+
+    publishHTML(target: [
+        allowMissing: true,
+        alwaysLinkToLastBuild: true,
+        keepAll: true,
+        reportDir: reportDir,
+        reportFiles: "*.html",
+        reportName: "Trivy ${scanType == 'fs' ? 'File System' : 'Image'} Scan (${stageName}) - Build ${env.BUILD_NUMBER}"
+    ])
+    
+    archiveArtifacts artifacts: "${reportDir}/*.html", allowEmptyArchive: true
+}
+
