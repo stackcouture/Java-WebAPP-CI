@@ -28,7 +28,7 @@ COPY --from=builder /app/target/app.jar app.jar
 
 # Health check to ensure the app is responding
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
-  CMD curl --silent --fail http://localhost:8080/actuator/health || exit 1
+  CMD curl --silent --fail http://localhost:8080/demo || exit 1
 
 # Expose app port
 EXPOSE 8080
