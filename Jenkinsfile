@@ -43,15 +43,29 @@ pipeline {
             }
         }
 
-        // stage('Depdendency Check') {
-        //     steps {
-        //         dependencyCheck additionalArguments: '--format HTML', odcInstallation: 'DP-Check'
-        //     }
-        // }
-
         stage('Build with Maven') {
             steps {
                 sh 'mvn clean package'
+            }
+        }
+
+        stage('Generate SBOM') {
+            steps {
+                sh 'mvn clean verify'
+            }
+        }
+
+        stage('Publish SBOM') {
+            steps {
+                script {
+                    def sbomFile = 'target/bom.xml' 
+                    if (fileExists(sbomFile)) {
+                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+                        echo "SBOM generated: ${sbomFile}"
+                    } else {
+                        echo "No SBOM file generated."
+                    }
+                }
             }
         }
 
