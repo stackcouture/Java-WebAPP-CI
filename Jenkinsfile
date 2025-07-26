@@ -12,7 +12,7 @@ pipeline {
     environment {
         SLACK_CHANNEL = '#all-jenkins'
         SLACK_TOKEN = credentials('slack-token')
-        COMMIT_SHA = ""
+        COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
         REGION = 'ap-south-1'
         SNYK_TOKEN = credentials('SNYK_TOKEN')
     }
@@ -36,14 +36,14 @@ pipeline {
             }
         }
 
-        stage('Get Commit SHA') {
-            steps {
-                script {
-                    env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                    echo "Using commit SHA: ${env.COMMIT_SHA}"
-                }
-            }
-        }
+        // stage('Get Commit SHA') {
+        //     steps {
+        //         script {
+        //             env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+        //             echo "Using commit SHA: ${env.COMMIT_SHA}"
+        //         }
+        //     }
+        // }
 
         stage('Build + Test + SBOM') {
             steps {
