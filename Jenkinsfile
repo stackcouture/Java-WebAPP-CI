@@ -1,3 +1,5 @@
+import groovy.json.JsonOutput
+
 pipeline {
     agent {
         label "jenkins-agent"
@@ -263,10 +265,7 @@ pipeline {
             }
         }
 
-        
-        import groovy.json.JsonOutput
-
-        stage('AI-Powered GPT Report') {
+         stage('AI-Powered GPT Report') {
             steps {
                 script {
                     def reportDir = "reports/ai/${env.BUILD_NUMBER}"
@@ -275,25 +274,24 @@ pipeline {
 
                     sh "mkdir -p ${reportDir}"
 
-                    // Read scan outputs
                     def snykJsonFile = findFiles(glob: "reports/snyk/${env.BUILD_NUMBER}/**/snyk-report-${env.COMMIT_SHA}.json")[0].path
                     def trivyJsonFile = findFiles(glob: "reports/trivy/${env.BUILD_NUMBER}/**/trivy-image-scan-${env.COMMIT_SHA}.json")[0].path
 
                     def snykJson = sh(script: "cat ${snykJsonFile} | jq -c .", returnStdout: true).trim()
                     def trivyJson = sh(script: "cat ${trivyJsonFile} | jq -c .", returnStdout: true).trim()
 
-                    // Construct prompt
                     def rawPrompt = """
-                        You are a DevSecOps expert. Generate a professional HTML report summarizing the following scan results. Include key CVEs, severities, affected packages, and remediation guidance.
+                    You are a DevSecOps expert. Generate a professional HTML report summarizing the following scan results. 
+                    Include key CVEs, severities, affected packages, and remediation guidance.
 
-                        === Trivy Scan ===
-                        ${trivyJson}
+                    === Trivy Scan ===
+                    ${trivyJson}
 
-                        === Snyk Scan ===
-                        ${snykJson}
+                    === Snyk Scan ===
+                    ${snykJson}
                     """
 
-                    // Build JSON payload using Groovy's JsonOutput (safe escaping)
+                    // Safe formatting for JSON
                     def promptPayload = [
                         model: "gpt-4",
                         temperature: 0.4,
@@ -301,9 +299,10 @@ pipeline {
                             [role: "user", content: rawPrompt]
                         ]
                     ]
+
                     writeFile file: promptFile, text: JsonOutput.prettyPrint(JsonOutput.toJson(promptPayload))
 
-                    // Send to OpenAI and store output as HTML
+                    // Call OpenAI API and write report
                     sh """
                         curl -s https://api.openai.com/v1/chat/completions \\
                         -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
@@ -311,7 +310,7 @@ pipeline {
                         -d @${promptFile} | jq -r '.choices[0].message.content' > ${gptReport}
                     """
 
-                    // Publish HTML report in Jenkins
+                    // Publish HTML report in Jenkins UI
                     publishHTML(target: [
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
@@ -321,7 +320,6 @@ pipeline {
                         reportName: "AI-Powered GPT Security Summary"
                     ])
 
-                    // Store in environment for next stage
                     env.GPT_REPORT_PATH = gptReport
                 }
             }
