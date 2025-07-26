@@ -205,6 +205,37 @@ pipeline {
             }
         }
 
+        stage('AI-Powered GPT Report') {
+            steps {
+                withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+                    script {
+                        def reportDir = "reports/ai/${env.BUILD_NUMBER}"
+                        def gptReport = "${reportDir}/gpt-security-summary-${env.COMMIT_SHA}.html"
+                        def snykJson = findFiles(glob: "reports/snyk/${env.BUILD_NUMBER}/**/snyk-report-${env.COMMIT_SHA}.json")[0].path
+                        def trivyJson = findFiles(glob: "reports/trivy/${env.BUILD_NUMBER}/**/trivy-image-scan-${env.COMMIT_SHA}.json")[0].path
+
+                        sh """
+                            mkdir -p ${reportDir}
+                            python3 scripts/generate_gpt_report.py ${trivyJson} ${snykJson} ${gptReport}
+                        """
+
+                        publishHTML(target: [
+                            allowMissing: true,
+                            alwaysLinkToLastBuild: true,
+                            keepAll: true,
+                            reportDir: reportDir,
+                            reportFiles: "gpt-security-summary-${env.COMMIT_SHA}.html",
+                            reportName: "AI-Powered GPT Security Summary"
+                        ])
+                        
+                        // Save path for email stage
+                        env.GPT_REPORT_PATH = gptReport
+                    }
+                }
+            }
+        }
+
+
         stage('Update YAML File - FINAL') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
@@ -273,11 +304,24 @@ pipeline {
             }
         }
 
-        success {
-        mail to: 'naveenramlu@gmail.com',
-             subject: "Build #${env.BUILD_NUMBER} Succeeded",
-             body: "Build ${env.BUILD_NUMBER} for commit ${env.COMMIT_SHA} succeeded. View in Jenkins: ${env.BUILD_URL}"
+        script {
+            if (fileExists(env.GPT_REPORT_PATH)) {
+                emailext(
+                    subject: "🛡️ AI Security Summary - Build ${env.BUILD_NUMBER}",
+                    body: "Attached is the GPT-generated security summary for build #${env.BUILD_NUMBER}.",
+                    to: "naveenramlu@gmail.com",
+                    attachmentsPattern: "${env.GPT_REPORT_PATH}"
+                )
+            } else {
+                echo "GPT Report not found — skipping email attachment."
+            }
         }
+        // success {
+        // mail to: 'naveenramlu@gmail.com',
+        //      subject: "Build #${env.BUILD_NUMBER} Succeeded",
+        //      body: "Build ${env.BUILD_NUMBER} for commit ${env.COMMIT_SHA} succeeded. View in Jenkins: ${env.BUILD_URL}"
+        // }
+
         failure {
             mail to: 'naveenramlu@gmail.com',
                 subject: "Build #${env.BUILD_NUMBER} Failed",
