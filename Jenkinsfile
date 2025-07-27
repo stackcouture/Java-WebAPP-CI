@@ -1,5 +1,7 @@
 pipeline {
-    agent any
+    agent {
+        label "jenkins-agent"
+    }
 
     environment {
         OPENAI_API_KEY = credentials('openai-api-key')  // Use Jenkins credentials plugin to store your API key securely
