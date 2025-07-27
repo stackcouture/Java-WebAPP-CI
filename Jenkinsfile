@@ -66,40 +66,40 @@ pipeline {
             }
         }
 
-        stage('Upload SBOM to Dependency-Track') {
-            steps {
-                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
-                    script {
-                        def sbomFile = 'target/bom.xml'
-                        if (!fileExists(sbomFile)) {
-                            error "❌ SBOM file not found: ${sbomFile}"
-                        }
+        // stage('Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+        //             script {
+        //                 def sbomFile = 'target/bom.xml'
+        //                 if (!fileExists(sbomFile)) {
+        //                     error "❌ SBOM file not found: ${sbomFile}"
+        //                 }
 
-                        def projectName = "${params.ECR_REPO_NAME}"
-                        def projectVersion = "${env.COMMIT_SHA}"
-                        def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
+        //                 def projectName = "${params.ECR_REPO_NAME}"
+        //                 def projectVersion = "${env.COMMIT_SHA}"
+        //                 def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
 
-                        echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
+        //                 echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
 
-                        withEnv([
-                            "DEPTRACK_URL=${dependencyTrackUrl}",
-                            "PROJECT_NAME=${projectName}",
-                            "PROJECT_VERSION=${projectVersion}"
-                        ]) {
-                            sh '''#!/bin/bash
-                                curl -X POST "$DEPTRACK_URL" \
-                                    -H "X-Api-Key: $DT_API_KEY" \
-                                    -H "Content-Type: multipart/form-data" \
-                                    -F "autoCreate=true" \
-                                    -F "projectName=$PROJECT_NAME" \
-                                    -F "projectVersion=$PROJECT_VERSION" \
-                                    -F "bom=@target/bom.xml"
-                            '''
-                        }
-                    }
-                }
-            }
-        }
+        //                 withEnv([
+        //                     "DEPTRACK_URL=${dependencyTrackUrl}",
+        //                     "PROJECT_NAME=${projectName}",
+        //                     "PROJECT_VERSION=${projectVersion}"
+        //                 ]) {
+        //                     sh '''#!/bin/bash
+        //                         curl -X POST "$DEPTRACK_URL" \
+        //                             -H "X-Api-Key: $DT_API_KEY" \
+        //                             -H "Content-Type: multipart/form-data" \
+        //                             -F "autoCreate=true" \
+        //                             -F "projectName=$PROJECT_NAME" \
+        //                             -F "projectVersion=$PROJECT_VERSION" \
+        //                             -F "bom=@target/bom.xml"
+        //                     '''
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Prepare Trivy Template') {
             steps {
@@ -265,65 +265,65 @@ pipeline {
             }
         }
 
-        stage('Generate GPT Report') {
-    steps {
-        script {
-            def prompt = """
-                Summarize the following security scan results and highlight risks and suggestions:
+//         stage('Generate GPT Report') {
+//     steps {
+//         script {
+//             def prompt = """
+//                 Summarize the following security scan results and highlight risks and suggestions:
 
-                Trivy Scan:
-                ${trivyScanOutput}
+//                 Trivy Scan:
+//                 ${trivyScanOutput}
 
-                Snyk Scan:
-                ${snykScanOutput}
+//                 Snyk Scan:
+//                 ${snykScanOutput}
 
-                SonarQube Scan:
-                ${sonarScanOutput}
-            """
+//                 SonarQube Scan:
+//                 ${sonarScanOutput}
+//             """
 
-            def promptFile = "openai_prompt.json"
-            def fullResponseFile = "openai_response.json"
-            def gptReportFile = "ai_report.md"
+//             def promptFile = "openai_prompt.json"
+//             def fullResponseFile = "openai_response.json"
+//             def gptReportFile = "ai_report.md"
 
-            // Use Groovy Map to build JSON safely
-            def payload = [
-                model: "gpt-4",
-                temperature: 0.4,
-                messages: [
-                    [role: "user", content: prompt]
-                ]
-            ]
+//             // Use Groovy Map to build JSON safely
+//             def payload = [
+//                 model: "gpt-4",
+//                 temperature: 0.4,
+//                 messages: [
+//                     [role: "user", content: prompt]
+//                 ]
+//             ]
 
-            // Write the payload JSON safely to file
-            writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
+//             // Write the payload JSON safely to file
+//             writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
 
-            // Call OpenAI API
-            sh """
-                curl -s https://api.openai.com/v1/chat/completions \\
-                  -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
-                  -H "Content-Type: application/json" \\
-                  -d @${promptFile} > ${fullResponseFile}
-            """
+//             // Call OpenAI API
+//             sh """
+//                 curl -s https://api.openai.com/v1/chat/completions \\
+//                   -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
+//                   -H "Content-Type: application/json" \\
+//                   -d @${promptFile} > ${fullResponseFile}
+//             """
 
-            // Check if response contains the expected field
-            def hasChoices = sh(
-                script: "jq -e '.choices[0].message.content' ${fullResponseFile}",
-                returnStatus: true
-            ) == 0
+//             // Check if response contains the expected field
+//             def hasChoices = sh(
+//                 script: "jq -e '.choices[0].message.content' ${fullResponseFile}",
+//                 returnStatus: true
+//             ) == 0
 
-            if (!hasChoices) {
-                error("❌ GPT response missing expected field. Check ${fullResponseFile}.")
-            }
+//             if (!hasChoices) {
+//                 error("❌ GPT response missing expected field. Check ${fullResponseFile}.")
+//             }
 
-            // Extract GPT output to markdown report
-            sh """
-                jq -r '.choices[0].message.content' ${fullResponseFile} > ${gptReportFile}
-            """
+//             // Extract GPT output to markdown report
+//             sh """
+//                 jq -r '.choices[0].message.content' ${fullResponseFile} > ${gptReportFile}
+//             """
 
-            echo "✅ GPT-based report generated: ${gptReportFile}"
-        }
-    }
-}
+//             echo "✅ GPT-based report generated: ${gptReportFile}"
+//         }
+//     }
+// }
 
         //  stage('AI-Powered GPT Report') {
         //     steps {
