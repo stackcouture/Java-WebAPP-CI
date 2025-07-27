@@ -16,6 +16,7 @@ pipeline {
         SLACK_TOKEN = credentials('slack-token')
         REGION = 'ap-south-1'
         SNYK_TOKEN = credentials('SNYK_TOKEN')
+        OPENAI_API_KEY = credentials('openai-api-key') 
     }
 
     tools {
@@ -65,41 +66,6 @@ pipeline {
                 }
             }
         }
-
-        // stage('Upload SBOM to Dependency-Track') {
-        //     steps {
-        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
-        //             script {
-        //                 def sbomFile = 'target/bom.xml'
-        //                 if (!fileExists(sbomFile)) {
-        //                     error "❌ SBOM file not found: ${sbomFile}"
-        //                 }
-
-        //                 def projectName = "${params.ECR_REPO_NAME}"
-        //                 def projectVersion = "${env.COMMIT_SHA}"
-        //                 def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
-
-        //                 echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
-
-        //                 withEnv([
-        //                     "DEPTRACK_URL=${dependencyTrackUrl}",
-        //                     "PROJECT_NAME=${projectName}",
-        //                     "PROJECT_VERSION=${projectVersion}"
-        //                 ]) {
-        //                     sh '''#!/bin/bash
-        //                         curl -X POST "$DEPTRACK_URL" \
-        //                             -H "X-Api-Key: $DT_API_KEY" \
-        //                             -H "Content-Type: multipart/form-data" \
-        //                             -F "autoCreate=true" \
-        //                             -F "projectName=$PROJECT_NAME" \
-        //                             -F "projectVersion=$PROJECT_VERSION" \
-        //                             -F "bom=@target/bom.xml"
-        //                     '''
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
 
         stage('Prepare Trivy Template') {
             steps {
@@ -206,55 +172,6 @@ pipeline {
                 }
             }
         }
-
-        
-
-
-        stage('Update YAML File - FINAL') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'github-pat', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
-                    script {
-                        def imageTag = env.COMMIT_SHA
-                        def branch = params.BRANCH
-                        def repoDir = 'Java-WebAPP-CD'
-
-                        sh "rm -rf ${repoDir}"
-                        sh "git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/stackcouture/Java-WebAPP-CD.git ${repoDir}"
-
-                        dir(repoDir) {
-                            sh "git checkout ${branch}"
-
-                            if (!fileExists("java-app-chart/values.yaml")) {
-                                error("File java-app-chart/values.yaml not found in branch ${branch}")
-                            }
-
-                            def tagExists = sh(script: "grep -q '^\\s*tag:' java-app-chart/values.yaml && echo found || echo notfound", returnStdout: true).trim()
-                            if (tagExists != 'found') {
-                                error("Could not find 'tag:' field in values.yaml — aborting.")
-                            }
-
-                            sh """
-                                sed -i -E "s|(^\\s*tag:\\s*\\\").*(\\\")|\\1${imageTag}\\2|" java-app-chart/values.yaml
-                            """
-
-                            sh 'git config user.email "naveenramlu@gmail.com"'
-                            sh 'git config user.name "Naveen"'
-                            sh 'git add java-app-chart/values.yaml'
-
-                            def changes = sh(script: 'git diff --cached --quiet || echo "changed"', returnStdout: true).trim()
-                            if (changes == "changed") {
-                                echo "Changes detected — committing and pushing."
-                                sh "git commit -m 'chore: update image tag to ${imageTag}'"
-                                sh "git push origin ${branch}"
-                            } else {
-                                echo "No changes detected — skipping commit."
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         
         stage('Cleanup Local Image Tags') {
             steps {
@@ -265,125 +182,66 @@ pipeline {
             }
         }
 
-//         stage('Generate GPT Report') {
-//     steps {
-//         script {
-//             def prompt = """
-//                 Summarize the following security scan results and highlight risks and suggestions:
+        stage('Generate GPT Report') {
+            steps {
+                script {
+                    // Reading the Trivy and Snyk scan results from the generated file paths
+                    def trivyScanOutput = readFile("reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html")  // Adjust this to the correct stage if needed
+                    def snykScanOutput = readFile("reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json")    // Adjust this to the correct stage if needed
 
-//                 Trivy Scan:
-//                 ${trivyScanOutput}
+                    def prompt = """
+                        Summarize the following security scan results and highlight risks and suggestions:
 
-//                 Snyk Scan:
-//                 ${snykScanOutput}
+                        Trivy Scan:
+                        ${trivyScanOutput}
 
-//                 SonarQube Scan:
-//                 ${sonarScanOutput}
-//             """
+                        Snyk Scan:
+                        ${snykScanOutput}
+                    """
 
-//             def promptFile = "openai_prompt.json"
-//             def fullResponseFile = "openai_response.json"
-//             def gptReportFile = "ai_report.md"
+                    def promptFile = "openai_prompt.json"
+                    def fullResponseFile = "openai_response.json"
+                    def gptReportFile = "ai_report.md"
 
-//             // Use Groovy Map to build JSON safely
-//             def payload = [
-//                 model: "gpt-4",
-//                 temperature: 0.4,
-//                 messages: [
-//                     [role: "user", content: prompt]
-//                 ]
-//             ]
+                    // Use Groovy Map to build JSON safely
+                    def payload = [
+                        model: "gpt-4",
+                        temperature: 0.4,
+                        messages: [
+                            [role: "user", content: prompt]
+                        ]
+                    ]
 
-//             // Write the payload JSON safely to file
-//             writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
+                    // Write the payload JSON safely to file
+                    writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
 
-//             // Call OpenAI API
-//             sh """
-//                 curl -s https://api.openai.com/v1/chat/completions \\
-//                   -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
-//                   -H "Content-Type: application/json" \\
-//                   -d @${promptFile} > ${fullResponseFile}
-//             """
+                    // Call OpenAI API
+                    sh """
+                        curl -s https://api.openai.com/v1/chat/completions \\
+                        -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
+                        -H "Content-Type: application/json" \\
+                        -d @${promptFile} > ${fullResponseFile}
+                    """
 
-//             // Check if response contains the expected field
-//             def hasChoices = sh(
-//                 script: "jq -e '.choices[0].message.content' ${fullResponseFile}",
-//                 returnStatus: true
-//             ) == 0
+                    // Check if response contains the expected field
+                    def hasChoices = sh(
+                        script: "jq -e '.choices[0].message.content' ${fullResponseFile}",
+                        returnStatus: true
+                    ) == 0
 
-//             if (!hasChoices) {
-//                 error("❌ GPT response missing expected field. Check ${fullResponseFile}.")
-//             }
+                    if (!hasChoices) {
+                        error("❌ GPT response missing expected field. Check ${fullResponseFile}.")
+                    }
 
-//             // Extract GPT output to markdown report
-//             sh """
-//                 jq -r '.choices[0].message.content' ${fullResponseFile} > ${gptReportFile}
-//             """
+                    // Extract GPT output to markdown report
+                    sh """
+                        jq -r '.choices[0].message.content' ${fullResponseFile} > ${gptReportFile}
+                    """
 
-//             echo "✅ GPT-based report generated: ${gptReportFile}"
-//         }
-//     }
-// }
-
-        //  stage('AI-Powered GPT Report') {
-        //     steps {
-        //         script {
-        //             def reportDir = "reports/ai/${env.BUILD_NUMBER}"
-        //             def gptReport = "${reportDir}/gpt-security-summary-${env.COMMIT_SHA}.html"
-        //             def promptFile = "${reportDir}/gpt-prompt.json"
-
-        //             sh "mkdir -p ${reportDir}"
-
-        //             def snykJsonFile = findFiles(glob: "reports/snyk/${env.BUILD_NUMBER}/**/snyk-report-${env.COMMIT_SHA}.json")[0].path
-        //             def trivyJsonFile = findFiles(glob: "reports/trivy/${env.BUILD_NUMBER}/**/trivy-image-scan-${env.COMMIT_SHA}.json")[0].path
-
-        //             def snykJson = sh(script: "cat ${snykJsonFile} | jq -c .", returnStdout: true).trim()
-        //             def trivyJson = sh(script: "cat ${trivyJsonFile} | jq -c .", returnStdout: true).trim()
-
-        //             def rawPrompt = """
-        //             You are a DevSecOps expert. Generate a professional HTML report summarizing the following scan results. 
-        //             Include key CVEs, severities, affected packages, and remediation guidance.
-
-        //             === Trivy Scan ===
-        //             ${trivyJson}
-
-        //             === Snyk Scan ===
-        //             ${snykJson}
-        //             """
-
-        //             // Safe formatting for JSON
-        //             def promptPayload = [
-        //                 model: "gpt-4",
-        //                 temperature: 0.4,
-        //                 messages: [
-        //                     [role: "user", content: rawPrompt]
-        //                 ]
-        //             ]
-
-        //             writeFile file: promptFile, text: JsonOutput.prettyPrint(JsonOutput.toJson(promptPayload))
-
-        //             // Call OpenAI API and write report
-        //             sh """
-        //                 curl -s https://api.openai.com/v1/chat/completions \\
-        //                 -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
-        //                 -H "Content-Type: application/json" \\
-        //                 -d @${promptFile} | jq -r '.choices[0].message.content' > ${gptReport}
-        //             """
-
-        //             // Publish HTML report in Jenkins UI
-        //             publishHTML(target: [
-        //                 allowMissing: true,
-        //                 alwaysLinkToLastBuild: true,
-        //                 keepAll: true,
-        //                 reportDir: reportDir,
-        //                 reportFiles: "gpt-security-summary-${env.COMMIT_SHA}.html",
-        //                 reportName: "AI-Powered GPT Security Summary"
-        //             ])
-
-        //             env.GPT_REPORT_PATH = gptReport
-        //         }
-        //     }
-        // }
+                    echo "✅ GPT-based report generated: ${gptReportFile}"
+                }
+            }
+        }
 
     }
 
@@ -398,16 +256,13 @@ pipeline {
                     echo "ℹNo test results found."
                 }
 
-                  // ✅ Proper place for script block in post section
-                if (env.GPT_REPORT_PATH && fileExists(env.GPT_REPORT_PATH)) {
+               if (fileExists("ai_report.md")) {
                     emailext(
-                        subject: "🛡️ AI Security Summary - Build ${env.BUILD_NUMBER}",
-                        body: "Attached is the GPT-generated security summary for build #${env.BUILD_NUMBER}.",
-                        to: "naveenramlu@gmail.com",
-                        attachmentsPattern: "${env.GPT_REPORT_PATH}"
+                        subject: "🛡️ AI Security Report - ${env.JOB_NAME}",
+                        body: "Find attached the AI-generated security analysis.",
+                        to: 'naveenramlu@gmail.com',
+                        attachmentsPattern: "ai_report.md"
                     )
-                } else {
-                    echo "GPT Report not found — skipping email attachment."
                 }
             }
         }
