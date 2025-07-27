@@ -182,7 +182,73 @@ pipeline {
             }
         }
 
-         stage('Generate GPT Report') {
+        //  stage('Generate GPT Report') {
+        //     steps {
+        //         script {
+        //             // Reading the Trivy and Snyk scan results from the generated file paths
+        //             def trivyScanOutput = readFile("reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html")  // Adjust this to the correct stage if needed
+        //             def snykScanOutput = readFile("reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json")    // Adjust this to the correct stage if needed
+
+        //             def prompt = """
+        //                 Summarize the following security scan results and highlight risks and suggestions:
+
+        //                 Trivy Scan:
+        //                 ${trivyScanOutput}
+
+        //                 Snyk Scan:
+        //                 ${snykScanOutput}
+        //             """
+
+        //             def promptFile = "openai_prompt.json"
+        //             def fullResponseFile = "openai_response.json"
+        //             def gptReportFile = "ai_report.md"
+					
+		// 			def payload = [
+        //                 model: "gpt-4o-mini", 
+        //                 messages: [
+        //                     [role: "user", content: prompt] 
+        //                 ]
+        //             ]
+
+        //             // Write the payload JSON safely to file
+        //             writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
+
+        //             // Call OpenAI API securely with credentials
+        //             withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+        //                 def apiResponse = sh(script: """
+        //                     curl -s https://api.openai.com/v1/chat/completions \\
+        //                     -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+        //                     -H "Content-Type: application/json" \\
+        //                     -d @${promptFile}
+        //                 """, returnStdout: true).trim()
+
+        //                 // Write the response to file for debugging
+        //                 writeFile file: fullResponseFile, text: apiResponse
+
+        //                 // Log the API response for debugging
+        //                 echo "OpenAI API Response: ${apiResponse}"
+
+        //                 // Parse the response and check if it contains the expected content
+        //                 def response = readJSON text: apiResponse
+        //                 if (response?.choices?.size() > 0) {
+        //                     def gptContent = response.choices[0].message.content
+        //                     if (!gptContent) {
+        //                         error "❌ GPT response does not contain content."
+        //                     } else {
+        //                         echo "✅ GPT response received."
+        //                         writeFile file: gptReportFile, text: gptContent
+        //                     }
+        //                 } else {
+        //                     error "❌ GPT response missing choices or content."
+        //                 }
+        //             }
+
+        //             echo "✅ GPT-based report generated: ${gptReportFile}"
+        //         }
+        //     }
+        // }
+
+        stage('Generate GPT Report') {
             steps {
                 script {
                     // Reading the Trivy and Snyk scan results from the generated file paths
@@ -202,8 +268,9 @@ pipeline {
                     def promptFile = "openai_prompt.json"
                     def fullResponseFile = "openai_response.json"
                     def gptReportFile = "ai_report.md"
-					
-					def payload = [
+                    def gptReportHtmlFile = "ai_report.html"  // HTML report file
+
+                    def payload = [
                         model: "gpt-4o-mini", 
                         messages: [
                             [role: "user", content: prompt] 
@@ -243,10 +310,23 @@ pipeline {
                         }
                     }
 
-                    echo "✅ GPT-based report generated: ${gptReportFile}"
+                    // Convert the generated markdown to HTML using pandoc
+                    echo "Converting Markdown to HTML..."
+                    sh """
+                        pandoc ${gptReportFile} -o ${gptReportHtmlFile}
+                    """
+
+                    echo "✅ GPT-based HTML report generated: ${gptReportHtmlFile}"
+
+                    // Optionally, archive the generated HTML report
+                    archiveArtifacts artifacts: gptReportHtmlFile, allowEmptyArchive: true
+
+                    // You can optionally publish the HTML report as a build artifact or use it as needed
+                    echo "HTML Report is ready: ${gptReportHtmlFile}"
                 }
             }
         }
+
 
     }
 
