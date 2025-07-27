@@ -17,7 +17,7 @@ pipeline {
 
                     // Build the JSON payload safely
                     def payload = [
-                        model: "gpt-4o-mini",  // GPT-4 model
+                        model: "gpt-4",  // Use GPT-4 model
                         messages: [
                             [role: "user", content: prompt]  // User message content
                         ]
@@ -32,15 +32,32 @@ pipeline {
 
                     // Call OpenAI API securely with credentials
                     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-                        def apiResponse = sh(script: """
-                            curl -s https://api.openai.com/v1/chat/completions \\
-                            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-                            -H "Content-Type: application/json" \\
-                            -d @openai_prompt.json
-                        """, returnStdout: true).trim()
+                        try {
+                            // Send API request and capture the response
+                            def apiResponse = sh(script: """
+                                curl -s https://api.openai.com/v1/chat/completions \\
+                                -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+                                -H "Content-Type: application/json" \\
+                                -d @openai_prompt.json
+                            """, returnStdout: true).trim()
 
-                        // Output the raw API response for debugging
-                        echo "API Response: ${apiResponse}"
+                            // Log the full API response for debugging
+                            echo "API Response: ${apiResponse}"
+
+                            // Check if response contains error
+                            def responseJson = readJSON text: apiResponse
+                            if (responseJson.error) {
+                                error "OpenAI API returned an error: ${responseJson.error.message}"
+                            }
+
+                            // Parse the response for the AI's generated content
+                            def aiResponse = responseJson.choices[0].message.content
+                            echo "AI's Response: ${aiResponse}"
+
+                        } catch (Exception e) {
+                            // Handle errors (e.g., API issues or invalid response)
+                            echo "Error occurred while calling OpenAI API: ${e.message}"
+                        }
                     }
                 }
             }
