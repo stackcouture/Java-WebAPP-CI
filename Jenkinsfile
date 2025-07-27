@@ -11,20 +11,20 @@ pipeline {
         stage('Prepare Payload') {
             steps {
                 script {
-                    // File names for the payload and the OpenAI response
+                    // Define file names for the payload and response
                     def promptFile = "openai_prompt.json"
-                    def fullResponseFile = "openai_response.json"
+                    def fullResponseFile = "openai_response.json"  // Define this variable
                     def gptReportFile = "ai_report.md"
 
                     // Sample user prompt data
                     def prompt = "Tell me a joke"  // Example prompt
 
-                    // Use Groovy Map to build JSON safely
+                    // Build the JSON payload safely
                     def payload = [
-                        model: "gpt-4o-mini",                // GPT-4 model
-                        temperature: 0.4,              // Response creativity (0.0 is very deterministic)
+                        model: "gpt-4o-mini",  // GPT-4 mini model
+                        temperature: 0.4,      // Response creativity
                         messages: [
-                            [role: "user", content: prompt]  // Message content from user
+                            [role: "user", content: prompt]  // User message content
                         ]
                     ]
 
@@ -61,7 +61,7 @@ pipeline {
                         def jsonResponse = readJSON file: fullResponseFile
                         def aiResponse = jsonResponse.choices[0].message.content
 
-                        // Write the AI's response to an AI report file
+                        // Create a markdown file with AI's response
                         def report = """
                         # GPT-4 Response
 
