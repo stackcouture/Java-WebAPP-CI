@@ -215,30 +215,32 @@ pipeline {
                     // Write the payload JSON safely to file
                     writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
 
-                    // Call OpenAI API
-                    sh """
-                        curl -s https://api.openai.com/v1/chat/completions \\
-                        -H "Authorization: Bearer ${OPENAI_API_KEY}" \\
-                        -H "Content-Type: application/json" \\
-                        -d @${promptFile} > ${fullResponseFile}
-                    """
-
-                    // Check if response contains the expected field
-                    def hasChoices = sh(
-                        script: "jq -e '.choices[0].message.content' ${fullResponseFile}",
-                        returnStatus: true
-                    ) == 0
-
-                    if (!hasChoices) {
-                        error("❌ GPT response missing expected field. Check ${fullResponseFile}.")
+                   // Call OpenAI API securely with credentials
+                    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+                        sh """
+                            curl -s https://api.openai.com/v1/chat/completions \\
+                            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+                            -H "Content-Type: application/json" \\
+                            -d @${promptFile} > ${fullResponseFile}
+                        """
                     }
 
-                    // Extract GPT output to markdown report
-                    sh """
-                        jq -r '.choices[0].message.content' ${fullResponseFile} > ${gptReportFile}
-                    """
+                     // Check if response contains the expected field
+                    def response = readJSON file: fullResponseFile
+                    if (response?.choices?.size() > 0) {
+                        def gptContent = response.choices[0].message.content
+                        if (!gptContent) {
+                            error "❌ GPT response does not contain content."
+                        } else {
+                            echo "✅ GPT response received."
+                            writeFile file: gptReportFile, text: gptContent
+                        }
+                    } else {
+                        error "❌ GPT response missing choices or content."
+                    }
 
                     echo "✅ GPT-based report generated: ${gptReportFile}"
+
                 }
             }
         }
