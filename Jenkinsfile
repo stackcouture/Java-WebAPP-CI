@@ -17,7 +17,7 @@ pipeline {
 
                     // Build the JSON payload safely
                     def payload = [
-                        model: "gpt-4",  // Use GPT-4 model
+                        model: "gpt-4o-mini",  // Use GPT-4 model
                         messages: [
                             [role: "user", content: prompt]  // User message content
                         ]
