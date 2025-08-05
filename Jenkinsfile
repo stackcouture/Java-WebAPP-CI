@@ -369,8 +369,21 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
 
+    def trivyStatus = (
+        trivySummary.toLowerCase().contains("no high") ||
+        trivySummary.toLowerCase().contains("no critical")
+    ) ? "OK" : "Issues Found"
+
+    def snykLower = snykSummary.toLowerCase()
+    def snykStatus = (
+        snykLower.contains("no high") &&
+        snykLower.contains("no critical") &&
+        snykLower.contains("no medium")
+    ) ? "OK" : "Issues Found"
+
     if (!snykSummary?.trim()) {
         snykSummary = "No high or critical vulnerabilities found by Snyk."
+        snykStatus = "OK"
     }   
 
     echo "Trivy Summary:\n${trivySummary}"
@@ -392,6 +405,10 @@ Context:
 Project: ${projectName}
 Commit SHA: ${gitSha}
 Build Number: ${buildNumber}
+
+Scan Status Summary:
+- Trivy: ${trivyStatus}
+- Snyk: ${snykStatus}
 
 --- Trivy Top Issues ---
 ${trivySummary}
@@ -424,7 +441,6 @@ ${snykSummary}
         def response = readJSON text: responseJson
         def gptContent = response.choices[0].message.content ?: error("Empty GPT content")
 
-        // Remove ```html and ``` from wrapped responses
         gptContent = gptContent
             .replaceAll(/(?m)^```html\s*/, "")
             .replaceAll(/(?m)^```$/, "")
