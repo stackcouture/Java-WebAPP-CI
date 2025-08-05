@@ -192,8 +192,6 @@ pipeline {
                     def trivyShort = trivyScanOutput.take(2000)
                     def snykShort = snykScanOutput.take(2000)
 
-
-
                     def prompt = """
                         Summarize the following security scan results and highlight risks and suggestions:
 
@@ -206,7 +204,7 @@ pipeline {
 
                     def promptFile = "openai_prompt.json"
                     def fullResponseFile = "openai_response.json"
-                    def gptReportFile = "ai_report.md"
+                    def gptReportFile = "ai_report.html"
 					
 					def payload = [
                         model: "gpt-4o-mini", 
@@ -227,13 +225,9 @@ pipeline {
                             -d @${promptFile}
                         """, returnStdout: true).trim()
 
-                        // Write the response to file for debugging
                         writeFile file: fullResponseFile, text: apiResponse
-
-                        // Log the API response for debugging
                         echo "OpenAI API Response: ${apiResponse}"
 
-                        // Parse the response and check if it contains the expected content
                         def response = readJSON text: apiResponse
                         if (response?.choices?.size() > 0) {
                             def gptContent = response.choices[0].message.content
@@ -241,20 +235,36 @@ pipeline {
                                 error "GPT response does not contain content."
                             } else {
                                 echo "GPT response received."
-                                writeFile file: gptReportFile, text: gptContent
+
+                                def htmlContent = """
+                                    <html>
+                                    <head>
+                                        <title>Security Report - AI Summary</title>
+                                        <style>
+                                            body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+                                            h2 { color: #2c3e50; }
+                                            pre { background: #f4f4f4; padding: 10px; border-left: 5px solid #ccc; }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <h2>Security Scan Report Summary (AI-Generated)</h2>
+                                        <pre>${gptContent.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</pre>
+                                    </body>
+                                    </html>
+                                    """
+
+                                writeFile file: gptReportFile, text: htmlContent
                             }
                         } else {
                             error "GPT response missing choices or content."
                         }
                     }
 
-                    echo "GPT-based report generated: ${gptReportFile}"
+                    echo "HTML GPT-based report generated: ${gptReportFile}"
                 }
             }
         }
-
     }
-
 
     post {
         always {
@@ -266,12 +276,13 @@ pipeline {
                     echo "No test results found."
                 }
 
-               if (fileExists("ai_report.md")) {
+               if (fileExists("ai_report.html")) {
                     emailext(
-                        subject: "AI Security Report - ${env.JOB_NAME}",
-                        body: "Find attached the AI-generated security analysis.",
+                        subject: "Security Report - Build #${env.BUILD_NUMBER}",
+                        body: "Please find the AI-generated security report attached.",
+                        attachLog: false,
                         to: 'naveenramlu@gmail.com',
-                        attachmentsPattern: "ai_report.md"
+                        attachmentsPattern: "ai_report.html"
                     )
                 }
             }
