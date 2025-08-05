@@ -254,53 +254,13 @@ pipeline {
 
                                 def htmlContent = """
                                     <html>
-                                    <head>
-                                        <title>Security Report - AI Summary</title>
-                                        <style>
-                                            body {
-                                                font-family: Arial, sans-serif;
-                                                padding: 20px;
-                                                font-size: 18px;
-                                                line-height: 1.8;
-                                            }
-                                            h1 {
-                                                font-size: 30px;
-                                                color: #2c3e50;
-                                            }
-                                            h2 {
-                                                font-size: 24px;
-                                                color: #2c3e50;
-                                            }
-                                            h3 {
-                                                font-size: 20px;
-                                            }
-                                            .badge {
-                                                font-size: 18px;
-                                                font-weight: bold;
-                                            }
-                                            .meta {
-                                                margin-bottom: 20px;
-                                            }
-                                            p, ul, li {
-                                                font-size: 18px;
-                                            }
-                                        </style>
-                                    </head>
-                                    <body>
-                                        <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" height="80" alt="Jenkins Logo"/>
-                                        <h1>Security Scan Report Summary (AI-Generated)</h1>
-                                        <div class="meta">
-                                            <p><strong>Project:</strong> ${projectName}</p>
-                                            <p><strong>Build Number:</strong> ${buildNumber}</p>
-                                            <p><strong>Commit SHA:</strong> ${gitSha}</p>
-                                            <p><strong>Status:</strong> <span class="badge">${badgeColor}</span></p>
-                                        </div>
-                                        <h2>Summary</h2>
-                                        <p>Scan results summarized below based on Trivy and Snyk data.</p>
-
-                                        <h3>Detailed Analysis</h3>
-                                        <div>${gptContent.replaceAll("\n", "<br/>")}</div>
-                                    </body>
+                                        <head>
+                                            <title>Security Report - AI Summary</title>
+                                        </head>
+                                        <body>
+                                            <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" height="80" alt="Jenkins Logo"/>
+                                            <div>${gptContent.replaceAll("\n", "<br/>")}</div>
+                                        </body>
                                     </html>
                                     """
 
