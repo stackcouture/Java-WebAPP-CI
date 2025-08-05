@@ -315,17 +315,18 @@ pipeline {
                 }
 
                 if (fileExists("ai_report.html")) {
-
-                    def gptReportFile = "ai_report.html"
-                    def htmlContent = readFile(file: gptReportFile)
+                    echo "Found ai_report.html"
+                    def htmlContent = readFile("ai_report.html")
+                    echo "HTML content length: ${htmlContent.length()}"
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER}",
                         htmlBody: htmlContent,
                         mimeType: 'text/html',
-                        attachLog: false,
-                        to: 'naveenramlu@gmail.com'                        
+                        to: 'naveenramlu@gmail.com'
                     )
+                } else {
+                    echo "❌ ai_report.html not found"
                 }
             }
         }
