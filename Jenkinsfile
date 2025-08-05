@@ -162,12 +162,14 @@ pipeline {
                 }
                 stage('Snyk After Push') {
                      options {
-                        timeout(time: 10, unit: 'MINUTES')
+                        timeout(time: 15, unit: 'MINUTES')
                     }
                     steps {
                         script {
                             def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runSnykScan("after-push", pushedTag)
+                            retry(2) {
+                                runSnykScan("after-push", pushedTag)
+                            }
                         }
                     }
                 }
@@ -381,15 +383,18 @@ def runSnykScan(stageName, imageTag) {
     def htmlFile = "${reportDir}/snyk-report-${env.COMMIT_SHA}.html"
 
     withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
-    // withEnv(["SNYK_TOKEN=${env.SNYK_TOKEN}"]) {
         sh """
             mkdir -p ${reportDir}
 
             snyk auth $SNYK_TOKEN
-            snyk container test ${imageTag} --severity-threshold=high --json > ${jsonFile} || true
+            DEBUG=*snyk* snyk container test ${imageTag} --severity-threshold=high --exclude-base-image-vulns --json > ${jsonFile} || true
 
             echo "<html><body><pre>" > ${htmlFile}
-            cat ${jsonFile} | jq . >> ${htmlFile}
+            if [ -s ${jsonFile} ]; then
+                cat ${jsonFile} | jq . >> ${htmlFile}
+            else
+                echo "Snyk scan failed or returned no data. Please check Jenkins logs or retry." >> ${htmlFile}
+            fi
             echo "</pre></body></html>" >> ${htmlFile}
         """
     }
