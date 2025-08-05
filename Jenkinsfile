@@ -452,7 +452,9 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
 
             <div class="section">
                 <h2>AI Recommendations</h2>
-                <p>${gptContent}</p>
+                <div class="highlight">
+                    ${gptContent.trim()}
+                </div>
             </div>
 
             <footer>
