@@ -316,6 +316,8 @@ pipeline {
 
                 if (fileExists("ai_report.html")) {
 
+                    sh 'wkhtmltopdf ai_report.html ai_report.pdf'
+
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER}",
                           body: """
@@ -329,7 +331,7 @@ pipeline {
                                 Jenkins
                             """,
                         mimeType: 'text/plain',
-                        attachmentsPattern: 'ai_report.html',
+                        attachmentsPattern: 'ai_report.pdf',
                         to: 'naveenramlu@gmail.com',
                         attachLog: false
                     )
