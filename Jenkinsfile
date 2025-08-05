@@ -322,7 +322,7 @@ pipeline {
                                     </body>
                                     </html>
                             """,
-                        mimeType: 'text/plain',
+                        mimeType: 'text/html',
                         attachmentsPattern: "${env.PDF_REPORT}",
                         to: 'naveenramlu@gmail.com',
                         attachLog: false
