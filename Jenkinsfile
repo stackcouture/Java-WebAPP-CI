@@ -182,18 +182,37 @@ pipeline {
             }
         }
 
-         stage('Generate GPT Report') {
+        stage('Generate GPT Report') {
             steps {
                 script {
-                    // Reading the Trivy and Snyk scan results from the generated file paths
-                    def trivyScanOutput = readFile("reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html")  // Adjust this to the correct stage if needed
-                    def snykScanOutput = readFile("reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json")    // Adjust this to the correct stage if needed
+                    def projectName = "My Java App" // Or pull dynamically from env or Jenkins param
+                    def gitSha = env.COMMIT_SHA
+                    def buildNumber = env.BUILD_NUMBER
+
+                    def trivyPath = "reports/trivy/${buildNumber}/after-push/trivy-image-scan-${gitSha}.html"
+                    def snykPath = "reports/snyk/${buildNumber}/after-push/snyk-report-${gitSha}.json"
+
+                    def trivyScanOutput = readFile(trivyPath)
+                    def snykScanOutput = readFile(snykPath)
 
                     def trivyShort = trivyScanOutput.take(2000)
                     def snykShort = snykScanOutput.take(2000)
 
+                    // Determine status badge logic from Snyk or Trivy scan
+                    def badgeColor = "✅"
+                    if (trivyScanOutput.toLowerCase().contains("critical") || 
+                        trivyScanOutput.toLowerCase().contains("high") || 
+                        snykScanOutput.toLowerCase().contains("critical") || 
+                        snykScanOutput.toLowerCase().contains("high")) {
+                        badgeColor = "❌"
+                    }
+
                     def prompt = """
                         Summarize the following security scan results and highlight risks and suggestions:
+
+                        Project: ${projectName}
+                        Commit SHA: ${gitSha}
+                        Build Number: ${buildNumber}
 
                         Trivy Scan:
                         ${trivyShort}
@@ -205,18 +224,16 @@ pipeline {
                     def promptFile = "openai_prompt.json"
                     def fullResponseFile = "openai_response.json"
                     def gptReportFile = "ai_report.html"
-					
-					def payload = [
-                        model: "gpt-4o-mini", 
+
+                    def payload = [
+                        model: "gpt-4o-mini",
                         messages: [
-                            [role: "user", content: prompt] 
+                            [role: "user", content: prompt]
                         ]
                     ]
 
-                    // Write the payload JSON safely to file
                     writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
 
-                    // Call OpenAI API securely with credentials
                     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
                         def apiResponse = sh(script: """
                             curl -s https://api.openai.com/v1/chat/completions \\
@@ -242,16 +259,36 @@ pipeline {
                                         <title>Security Report - AI Summary</title>
                                         <style>
                                             body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
-                                            h2 { color: #2c3e50; }
+                                            h1, h2 { color: #2c3e50; }
+                                            .badge { font-size: 18px; margin-top: 10px; }
                                             pre { background: #f4f4f4; padding: 10px; border-left: 5px solid #ccc; }
+                                            .meta { font-size: 14px; color: #555; margin-bottom: 10px; }
                                         </style>
                                     </head>
                                     <body>
-                                        <h2>Security Scan Report Summary (AI-Generated)</h2>
+                                        <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" height="80" alt="Jenkins Logo"/>
+                                        <h1>Security Scan Report Summary (AI-Generated)</h1>
+                                        <div class="meta">
+                                            <strong>Project:</strong> ${projectName}<br>
+                                            <strong>Build Number:</strong> ${buildNumber}<br>
+                                            <strong>Commit SHA:</strong> ${gitSha}<br>
+                                            <strong>Status:</strong> <span class="badge">${badgeColor}</span>
+                                        </div>
+
+                                        <h2>Table of Contents</h2>
+                                        <ul>
+                                            <li><a href="#summary">1. Summary</a></li>
+                                            <li><a href="#details">2. Detailed Analysis</a></li>
+                                        </ul>
+
+                                        <h2 id="summary">1. Summary</h2>
+                                        <p>Scan results summarized below based on Trivy and Snyk data.</p>
+
+                                        <h2 id="details">2. Detailed Analysis</h2>
                                         <pre>${gptContent.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</pre>
                                     </body>
                                     </html>
-                                    """
+                                """
 
                                 writeFile file: gptReportFile, text: htmlContent
                             }
@@ -264,6 +301,7 @@ pipeline {
                 }
             }
         }
+
     }
 
     post {
@@ -276,13 +314,17 @@ pipeline {
                     echo "No test results found."
                 }
 
-               if (fileExists("ai_report.html")) {
+                if (fileExists("ai_report.html")) {
+
+                    def gptReportFile = "ai_report.html"
+                    def htmlContent = readFile(file: gptReportFile)
+
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER}",
-                        body: "Please find the AI-generated security report attached.",
+                        body: htmlContent,
                         attachLog: false,
                         to: 'naveenramlu@gmail.com',
-                        attachmentsPattern: "ai_report.html"
+                        mimeType: 'text/html'
                     )
                 }
             }
