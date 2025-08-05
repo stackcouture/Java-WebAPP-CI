@@ -363,6 +363,9 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
 
+    echo "Trivy Summary:\n${trivySummary}"
+    echo "Snyk Summary:\n${snykSummary}"
+
     def prompt = """
 You are a security analyst assistant.
 
@@ -386,6 +389,7 @@ ${trivySummary}
 --- Snyk Top Issues ---
 ${snykSummary}
 """
+    echo "GPT Prompt:\n${prompt}"
 
     def gptPromptFile = "openai_prompt.json"
     def gptOutputFile = "openai_response.json"
@@ -469,22 +473,41 @@ ${snykSummary}
 }
 
 def extractTopVulns(String jsonPath, String toolName) {
-    if (!fileExists(jsonPath)) return "${toolName} JSON file not found."
+    if (!fileExists(jsonPath) || readFile(jsonPath).trim().isEmpty()) {
+        return "${toolName} JSON file not found or is empty."
+    }
 
-    return sh(
-        script: """#!/bin/bash
-            jq -r '
-                .Results[]?.Vulnerabilities? // [] |
-                map(select(.Severity=="HIGH" or .Severity=="CRITICAL")) |
-                sort_by(.Severity)[:5][] |
-                "* \\(.VulnerabilityID): \\(.Title) [\\(.Severity)] in \\(.PkgName)"
-            ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
-        """,
-        returnStdout: true
-    ).trim()
+   if (toolName == "Snyk") {
+        return sh(
+            script: """#!/bin/bash
+                jq -r '
+                    .vulnerabilities? // [] |
+                    map(select(.severity == "high" or .severity == "critical")) |
+                    sort_by(.severity)[:5][] |
+                    "* ID: \\(.id) | Title: \\(.title) [\\(.severity)] in \\(.name)"
+                ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
+            """,
+            returnStdout: true
+        ).trim()
+    } else if (toolName == "Trivy") {
+        return sh(
+            script: """#!/bin/bash
+                jq -r '
+                    .Results[]?.Vulnerabilities? // [] |
+                    map(select(.Severity == "HIGH" or .Severity == "CRITICAL")) |
+                    sort_by(.Severity)[:5][] |
+                    "* ID: \\(.VulnerabilityID) | Title: \\(.Title) [\\(.Severity)] in \\(.PkgName)"
+                ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
+            """,
+            returnStdout: true
+        ).trim()
+    } else {
+        return "Unsupported tool: ${toolName}"
+    }
 }
 
 def parseStatusBadge(String gptContent) {
+    echo "Raw GPT content for badge parsing:\n${gptContent}"
     def matcher = gptContent =~ /(?i)<strong>Status:<\/strong>\s*(OK|Issues Found)/
     def statusText = matcher.find() ? matcher.group(1).toUpperCase() : "ISSUES FOUND"
     def badgeColor = statusText == "OK" ? "✅" : "❌"
