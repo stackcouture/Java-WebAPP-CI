@@ -258,38 +258,42 @@ pipeline {
                                     <head>
                                         <title>Security Report - AI Summary</title>
                                         <style>
-                                            body { 
-                                                font-family: Arial, sans-serif; 
-                                                padding: 20px; 
-                                                line-height: 1.8; 
-                                                font-size: 16px; /* Increased from default ~14px */
+                                            body {
+                                                font-family: Arial, sans-serif;
+                                                padding: 20px;
+                                                font-size: 20px;
+                                                line-height: 1.8;
                                             }
-                                            h1 { 
-                                                color: #2c3e50; 
-                                                font-size: 28px; 
+
+                                            h1 {
+                                                font-size: 32px;
+                                                color: #2c3e50;
                                             }
-                                            h2 { 
-                                                color: #2c3e50; 
-                                                font-size: 22px; 
+
+                                            h2 {
+                                                font-size: 26px;
+                                                color: #2c3e50;
                                             }
-                                            .badge { 
-                                                font-size: 18px; 
-                                                margin-top: 10px; 
+
+                                            h3 {
+                                                font-size: 22px;
+                                            }
+
+                                            .badge {
+                                                font-size: 20px;
                                                 font-weight: bold;
                                             }
-                                            pre { 
-                                                background: #f4f4f4; 
-                                                padding: 15px; 
-                                                border-left: 5px solid #ccc; 
-                                                font-size: 15px; 
+
+                                            .meta, ul, li, span, p {
+                                                font-size: 20px;
                                             }
-                                            .meta { 
-                                                font-size: 15px; 
-                                                color: #555; 
-                                                margin-bottom: 15px; 
-                                            }
-                                            ul { 
-                                                font-size: 16px; 
+
+                                            pre {
+                                                font-size: 18px;
+                                                line-height: 1.8;
+                                                padding: 15px;
+                                                background: #f4f4f4;
+                                                border-left: 5px solid #ccc;
                                             }
                                         </style>
                                     </head>
@@ -303,8 +307,8 @@ pipeline {
                                             <strong>Status:</strong> <span class="badge">${badgeColor}</span>
                                         </div>
 
-                                        <h2 id="summary">1. Summary</h2>
-                                        <p>Scan results summarized below based on Trivy and Snyk data.</p>
+                                        
+                                        <h3>Scan results summarized below based on Trivy and Snyk data.</h3>
 
                                         <h2 id="details">2. Detailed Analysis</h2>
                                         <pre>${gptContent.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</pre>
@@ -341,7 +345,7 @@ pipeline {
         success {
             script {
                 if (fileExists("ai_report.html")) {
-                    sh 'wkhtmltopdf ai_report.html ai_report.pdf'
+                    sh 'wkhtmltopdf --zoom 1.5 ai_report.html ai_report.pdf'
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
