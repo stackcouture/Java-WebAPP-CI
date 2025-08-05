@@ -321,10 +321,10 @@ pipeline {
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER}",
-                        body: htmlContent,
+                        htmlBody: htmlContent,
+                        mimeType: 'text/html',
                         attachLog: false,
-                        to: 'naveenramlu@gmail.com',
-                        mimeType: 'text/html'
+                        to: 'naveenramlu@gmail.com'                        
                     )
                 }
             }
