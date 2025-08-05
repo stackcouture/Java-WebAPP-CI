@@ -58,10 +58,10 @@ pipeline {
                     def sbomFile = 'target/bom.xml'
                     if (fileExists(sbomFile)) {
                         archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
-                        echo "✅ SBOM archived: ${sbomFile}"
+                        echo "SBOM archived: ${sbomFile}"
                     }
                     else {
-                        error "❌ SBOM not found: ${sbomFile}"
+                        error "SBOM not found: ${sbomFile}"
                     }
                 }
             }
@@ -189,14 +189,19 @@ pipeline {
                     def trivyScanOutput = readFile("reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html")  // Adjust this to the correct stage if needed
                     def snykScanOutput = readFile("reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json")    // Adjust this to the correct stage if needed
 
+                    def trivyShort = trivyScanOutput.take(2000)
+                    def snykShort = snykScanOutput.take(2000)
+
+
+
                     def prompt = """
                         Summarize the following security scan results and highlight risks and suggestions:
 
                         Trivy Scan:
-                        ${trivyScanOutput}
+                        ${trivyShort}
 
                         Snyk Scan:
-                        ${snykScanOutput}
+                        ${snykShort}
                     """
 
                     def promptFile = "openai_prompt.json"
@@ -233,17 +238,17 @@ pipeline {
                         if (response?.choices?.size() > 0) {
                             def gptContent = response.choices[0].message.content
                             if (!gptContent) {
-                                error "❌ GPT response does not contain content."
+                                error "GPT response does not contain content."
                             } else {
-                                echo "✅ GPT response received."
+                                echo "GPT response received."
                                 writeFile file: gptReportFile, text: gptContent
                             }
                         } else {
-                            error "❌ GPT response missing choices or content."
+                            error "GPT response missing choices or content."
                         }
                     }
 
-                    echo "✅ GPT-based report generated: ${gptReportFile}"
+                    echo "GPT-based report generated: ${gptReportFile}"
                 }
             }
         }
@@ -258,12 +263,12 @@ pipeline {
                 if (fileExists('target/surefire-reports')) {
                     junit 'target/surefire-reports/*.xml'
                 } else {
-                    echo "ℹNo test results found."
+                    echo "No test results found."
                 }
 
                if (fileExists("ai_report.md")) {
                     emailext(
-                        subject: "🛡️ AI Security Report - ${env.JOB_NAME}",
+                        subject: "AI Security Report - ${env.JOB_NAME}",
                         body: "Find attached the AI-generated security analysis.",
                         to: 'naveenramlu@gmail.com',
                         attachmentsPattern: "ai_report.md"
