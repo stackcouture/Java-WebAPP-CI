@@ -188,119 +188,13 @@ pipeline {
         stage('Generate GPT Report') {
             steps {
                 script {
-                    def projectName = "My Java App"
-                    def gitSha = env.COMMIT_SHA
-                    def buildNumber = env.BUILD_NUMBER
-
-                    def trivyPath = "reports/trivy/${buildNumber}/after-push/trivy-image-scan-${gitSha}.html"
-                    def snykPath = "reports/snyk/${buildNumber}/after-push/snyk-report-${gitSha}.json"
-
-                    def trivyScanOutput = readFile(trivyPath)
-                    def snykScanOutput = readFile(snykPath)
-
-                    def trivyShort = trivyScanOutput.take(2500)
-                    def snykShort = snykScanOutput.take(2500)
-
-                    def prompt = """
-                        You are a security analyst assistant.
-
-                        Based on the following Trivy and Snyk scan outputs, generate a structured and professional security report in valid HTML only. 
-
-                        Your HTML must include:
-
-                        - <h2>, <p>, <ul>, and <strong> tags only (no Markdown, no <code> or <pre> blocks)
-                        - Clear section headings: Project Overview, Vulnerabilities Summary, License Issues, and Recommendations
-                        - A line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
-                        - Summarize vulnerabilities by severity (Critical, High, Medium)
-                        - Mention any license issues like GPL, AGPL, LGPL if present
-                        - Give 2–4 recommendations in <ul> format
-
-                        Context:
-                        Project: ${projectName}
-                        Commit SHA: ${gitSha}
-                        Build Number: ${buildNumber}
-
-                        --- Trivy Output (Excerpt) ---
-                        ${trivyShort}
-                        --- End ---
-
-                        --- Snyk Output (Excerpt) ---
-                        ${snykShort}
-                        --- End ---
-                    """
-
-                    def gptPromptFile = "openai_prompt.json"
-                    def gptOutputFile = "openai_response.json"
-                    def gptReportFile = "ai_report.html"
-
-                    def payload = [
-                        model: "gpt-4o-mini",
-                        messages: [[role: "user", content: prompt]]
-                    ]
-
-                    writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
-
-                    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-                        def responseJson = sh(script: """
-                            curl -s https://api.openai.com/v1/chat/completions \\
-                            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-                            -H "Content-Type: application/json" \\
-                            -d @${gptPromptFile}
-                        """, returnStdout: true).trim()
-
-                        writeFile file: gptOutputFile, text: responseJson
-                        def response = readJSON text: responseJson
-                        def gptContent = response.choices[0].message.content ?: error("Empty GPT content")
-
-                        def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
-
-                        def htmlContent = """
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                                <meta charset="UTF-8">
-                                <title>Security Report - Build Summary</title>
-                                <style>
-                                body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
-                                h1, h2 { color: #2c3e50; }
-                                .section { margin-bottom: 25px; }
-                                ul { margin-top: 0; padding-left: 20px; }
-                                .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
-                                .badge-ok { color: green; font-weight: bold; }
-                                .badge-fail { color: red; font-weight: bold; }
-                                a { color: #2c3e50; text-decoration: underline; }
-                                footer { margin-top: 40px; font-size: 0.9em; color: #888; }
-                                </style>
-                            </head>
-                            <body>
-                                <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-                                <h1>Security Scan Summary</h1>
-                                
-                                <div class="section">
-                                <h2>Trivy Scan</h2>
-                                <p>Full Trivy scan results are archived. Please <a href="${env.BUILD_URL}artifact/${trivyPath}">click here</a> to view the detailed HTML report.</p>
-                                </div>
-
-                                <div class="section">
-                                <h2>Snyk Summary</h2>
-                                <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
-                                </div>
-
-                                <div class="section">
-                                <h2>AI Recommendations</h2>
-                                <div class="highlight">${gptContent}</div>
-                                </div>
-
-                                <footer>
-                                <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
-                                </footer>
-                            </body>
-                            </html>
-                        """
-
-                        writeFile file: gptReportFile, text: htmlContent
-                        echo "GPT-based HTML report saved: ${gptReportFile}"
-                    }
+                    runGptSecuritySummary(
+                        "My Java App",
+                        env.COMMIT_SHA,
+                        env.BUILD_NUMBER,
+                        "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
+                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+                    )
                 }   
             } 
         } 
@@ -464,9 +358,118 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyPath, String snykPath) {
+    def trivyScanOutput = readFile(trivyPath)
+    def snykScanOutput = readFile(snykPath)
+
+    def trivyShort = trivyScanOutput.take(2500)
+    def snykShort = snykScanOutput.take(2500)
+
+    def prompt = """
+        You are a security analyst assistant.
+
+        Based on the following Trivy and Snyk scan outputs, generate a structured and professional security report in valid HTML only. 
+
+        Your HTML must include:
+
+        - <h2>, <p>, <ul>, and <strong> tags only (no Markdown, no <code> or <pre> blocks)
+        - Clear section headings: Project Overview, Vulnerabilities Summary, License Issues, and Recommendations
+        - A line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
+        - Summarize vulnerabilities by severity (Critical, High, Medium)
+        - Mention any license issues like GPL, AGPL, LGPL if present
+        - Give 2–4 recommendations in <ul> format
+
+        Context:
+        Project: ${projectName}
+        Commit SHA: ${gitSha}
+        Build Number: ${buildNumber}
+
+        --- Trivy Output (Excerpt) ---
+        ${trivyShort}
+        --- End ---
+
+        --- Snyk Output (Excerpt) ---
+        ${snykShort}
+        --- End ---
+    """
+
+    def gptPromptFile = "openai_prompt.json"
+    def gptOutputFile = "openai_response.json"
+    def gptReportFile = "ai_report.html"
+
+    def payload = [
+        model: "gpt-4o-mini",
+        messages: [[role: "user", content: prompt]]
+    ]
+
+    writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
+
+    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+        def responseJson = sh(script: """
+            curl -s https://api.openai.com/v1/chat/completions \\
+            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+            -H "Content-Type: application/json" \\
+            -d @${gptPromptFile}
+        """, returnStdout: true).trim()
+
+        writeFile file: gptOutputFile, text: responseJson
+        def response = readJSON text: responseJson
+        def gptContent = response.choices[0].message.content ?: error("Empty GPT content")
+
+        def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
+
+        def htmlContent = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Security Report - Build Summary</title>
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
+                h1, h2 { color: #2c3e50; }
+                .section { margin-bottom: 25px; }
+                ul { margin-top: 0; padding-left: 20px; }
+                .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+                .badge-ok { color: green; font-weight: bold; }
+                .badge-fail { color: red; font-weight: bold; }
+                a { color: #2c3e50; text-decoration: underline; }
+                footer { margin-top: 40px; font-size: 0.9em; color: #888; }
+            </style>
+        </head>
+        <body>
+            <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+            <h1>Security Scan Summary</h1>
+
+            <div class="section">
+                <h2>Trivy Scan</h2>
+                <p>Full Trivy scan results are archived. Please <a href="${env.BUILD_URL}artifact/${trivyPath}">click here</a> to view the detailed HTML report.</p>
+            </div>
+
+            <div class="section">
+                <h2>Snyk Summary</h2>
+                <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
+            </div>
+
+            <div class="section">
+                <h2>AI Recommendations</h2>
+                <p>${gptContent}</p>
+            </div>
+
+            <footer>
+                <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+            </footer>
+        </body>
+        </html>
+        """
+
+        writeFile file: gptReportFile, text: htmlContent
+        echo "✅ GPT-based HTML report saved: ${gptReportFile}"
+    }
+}
+
 def parseStatusBadge(String gptContent) {
     def matcher = gptContent =~ /(?i)<strong>Status:<\/strong>\s*(OK|Issues Found)/
-    def statusText = matcher.find() ? matcher.group(1).toUpperCase() : "Issues Found"
+    def statusText = matcher.find() ? matcher.group(1).toUpperCase() : "ISSUES FOUND"
     def badgeColor = statusText == "OK" ? "✅" : "❌"
     def badgeClass = statusText == "OK" ? "badge-ok" : "badge-fail"
     return [statusText, badgeColor, badgeClass]
