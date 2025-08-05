@@ -17,6 +17,7 @@ pipeline {
         REGION = 'ap-south-1'
         SNYK_TOKEN = credentials('SNYK_TOKEN')
         OPENAI_API_KEY = credentials('openai-api-key') 
+        PDF_REPORT = 'ai_report.pdf'
     }
 
     tools {
@@ -224,7 +225,6 @@ pipeline {
                     def promptFile = "openai_prompt.json"
                     def fullResponseFile = "openai_response.json"
                     def gptReportFile = "ai_report.html"
-                    def pdfReportFile = "ai_report.pdf"
 
                     def payload = [
                         model: "gpt-4o-mini",
@@ -331,7 +331,7 @@ pipeline {
         success {
             script {
                 if (fileExists("ai_report.html")) {
-                    sh "pandoc ai_report.html -f html -t pdf -o ${pdfReportFile} --standalone --pdf-engine=wkhtmltopdf"
+                    sh "pandoc ai_report.html -f html -t pdf -o ${env.PDF_REPORT} --standalone --pdf-engine=wkhtmltopdf"
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
@@ -346,7 +346,7 @@ pipeline {
                                 Jenkins
                             """,
                         mimeType: 'text/plain',
-                        attachmentsPattern: 'ai_report.pdf',
+                        attachmentsPattern: "${env.PDF_REPORT}",
                         to: 'naveenramlu@gmail.com',
                         attachLog: false
                     )
