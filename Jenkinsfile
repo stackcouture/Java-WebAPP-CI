@@ -258,11 +258,39 @@ pipeline {
                                     <head>
                                         <title>Security Report - AI Summary</title>
                                         <style>
-                                            body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
-                                            h1, h2 { color: #2c3e50; }
-                                            .badge { font-size: 18px; margin-top: 10px; }
-                                            pre { background: #f4f4f4; padding: 10px; border-left: 5px solid #ccc; }
-                                            .meta { font-size: 14px; color: #555; margin-bottom: 10px; }
+                                            body { 
+                                                font-family: Arial, sans-serif; 
+                                                padding: 20px; 
+                                                line-height: 1.8; 
+                                                font-size: 16px; /* Increased from default ~14px */
+                                            }
+                                            h1 { 
+                                                color: #2c3e50; 
+                                                font-size: 28px; 
+                                            }
+                                            h2 { 
+                                                color: #2c3e50; 
+                                                font-size: 22px; 
+                                            }
+                                            .badge { 
+                                                font-size: 18px; 
+                                                margin-top: 10px; 
+                                                font-weight: bold;
+                                            }
+                                            pre { 
+                                                background: #f4f4f4; 
+                                                padding: 15px; 
+                                                border-left: 5px solid #ccc; 
+                                                font-size: 15px; 
+                                            }
+                                            .meta { 
+                                                font-size: 15px; 
+                                                color: #555; 
+                                                margin-bottom: 15px; 
+                                            }
+                                            ul { 
+                                                font-size: 16px; 
+                                            }
                                         </style>
                                     </head>
                                     <body>
@@ -274,12 +302,6 @@ pipeline {
                                             <strong>Commit SHA:</strong> ${gitSha}<br>
                                             <strong>Status:</strong> <span class="badge">${badgeColor}</span>
                                         </div>
-
-                                        <h2>Table of Contents</h2>
-                                        <ul>
-                                            <li><a href="#summary">1. Summary</a></li>
-                                            <li><a href="#details">2. Detailed Analysis</a></li>
-                                        </ul>
 
                                         <h2 id="summary">1. Summary</h2>
                                         <p>Scan results summarized below based on Trivy and Snyk data.</p>
@@ -313,13 +335,16 @@ pipeline {
                 } else {
                     echo "No test results found."
                 }
+            }
+        }
 
+        success {
+            script {
                 if (fileExists("ai_report.html")) {
-
                     sh 'wkhtmltopdf ai_report.html ai_report.pdf'
 
                     emailext(
-                        subject: "Security Report - Build #${env.BUILD_NUMBER}",
+                        subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
                           body: """
                                 Hello Team,
 
@@ -335,17 +360,96 @@ pipeline {
                         to: 'naveenramlu@gmail.com',
                         attachLog: false
                     )
-                } else {
-                    echo "ai_report.html not found"
+                }
+
+                wrap([$class: 'BuildUser']) {
+                    slackSend(
+                        channel: env.SLACK_CHANNEL,
+                        token: env.SLACK_TOKEN,
+                        color: 'good',
+                        message: """\
+                            *Deployment Successful!*
+                            *Project:* `${env.JOB_NAME}`
+                            *Commit:* `${env.COMMIT_SHA}`
+                            *Build Number:* #${env.BUILD_NUMBER}
+                            *Branch:* `${params.BRANCH}`
+                            *Triggered By:* ${BUILD_USER} 👤
+                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
+                            _This is an automated notification from Jenkins 🤖_
+                            """
+                    )
                 }
             }
         }
 
         failure {
-            mail to: 'naveenramlu@gmail.com',
-                subject: "Build #${env.BUILD_NUMBER} Failed",
-                body: "Build ${env.BUILD_NUMBER} for commit ${env.COMMIT_SHA} failed. Please check: ${env.BUILD_URL}"
+            script {
+                 wrap([$class: 'BuildUser']) {
+                    slackSend(
+                        channel: env.SLACK_CHANNEL,
+                        token: env.SLACK_TOKEN,
+                        color: 'danger',
+                        message: """\
+                            *❌ FAILURE Deployment!*
+                            *Project:* `${env.JOB_NAME}`
+                            *Commit:* `${env.COMMIT_SHA}`
+                            *Build Number:* #${env.BUILD_NUMBER}
+                            *Branch:* `${params.BRANCH}`
+                            *Triggered By:* ${BUILD_USER} 👤
+                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
+                            _This is an automated notification from Jenkins 🤖_
+                            """
+                    )
+                }
+            }
         }
+
+        unstable {
+            script {
+                 wrap([$class: 'BuildUser']) {
+                    slackSend(
+                        channel: env.SLACK_CHANNEL,
+                        token: env.SLACK_TOKEN,
+                        color: 'warning',
+                        message: """\
+                            *⚠️ UNSTABLE Deployment!*
+                            *Project:* `${env.JOB_NAME}`
+                            *Commit:* `${env.COMMIT_SHA}`
+                            *Build Number:* #${env.BUILD_NUMBER}
+                            *Branch:* `${params.BRANCH}`
+                            *Triggered By:* ${BUILD_USER} 👤
+                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
+                            _This is an automated notification from Jenkins 🤖_
+                            """
+                    )
+                }
+            }
+        }
+
+        aborted {
+            script {
+                  wrap([$class: 'BuildUser']) {
+                    slackSend(
+                        channel: env.SLACK_CHANNEL,
+                        token: env.SLACK_TOKEN,
+                        color: '#808080',
+                        message: """\
+                            *🛑 ABORTED Deployment!*
+                            *Project:* `${env.JOB_NAME}`
+                            *Commit:* `${env.COMMIT_SHA}`
+                            *Build Number:* #${env.BUILD_NUMBER}
+                            *Branch:* `${params.BRANCH}`
+                            *Triggered By:* ${BUILD_USER} 👤
+                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
+                            _This is an automated notification from Jenkins 🤖_
+                            """
+                    )
+                }
+            }
+        }
+
+
+
     }
 }
 
