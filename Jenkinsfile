@@ -188,7 +188,8 @@ pipeline {
         stage('Generate GPT Report') {
             steps {
                 script {
-                    def projectName = "My Java App" // Or pull dynamically from env or Jenkins param
+                    
+                    def projectName = "My Java App"
                     def gitSha = env.COMMIT_SHA
                     def buildNumber = env.BUILD_NUMBER
 
@@ -201,13 +202,12 @@ pipeline {
                     def trivyShort = trivyScanOutput.take(2000)
                     def snykShort = snykScanOutput.take(2000)
 
-                    // Determine status badge logic from Snyk or Trivy scan
-                    def badgeColor = "✅"
-                    if (trivyScanOutput.toLowerCase().contains("critical") || 
-                        trivyScanOutput.toLowerCase().contains("high") || 
-                        snykScanOutput.toLowerCase().contains("critical") || 
+                    def badgeColor = "badge-ok"
+                    if (trivyScanOutput.toLowerCase().contains("critical") ||
+                        trivyScanOutput.toLowerCase().contains("high") ||
+                        snykScanOutput.toLowerCase().contains("critical") ||
                         snykScanOutput.toLowerCase().contains("high")) {
-                        badgeColor = "❌"
+                        badgeColor = "badge-fail"
                     }
 
                     def prompt = """
@@ -238,29 +238,73 @@ pipeline {
                     writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
 
                     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-                        def apiResponse = sh(script: """
-                            curl -s https://api.openai.com/v1/chat/completions \\
-                            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-                            -H "Content-Type: application/json" \\
-                            -d @${promptFile}
-                        """, returnStdout: true).trim()
+                            def apiResponse = sh(script: """
+                                curl -s https://api.openai.com/v1/chat/completions \\
+                                -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+                                -H "Content-Type: application/json" \\
+                                -d @${promptFile}
+                            """, returnStdout: true).trim()
 
-                        writeFile file: fullResponseFile, text: apiResponse
-                        def response = readJSON text: apiResponse
+                            writeFile file: fullResponseFile, text: apiResponse
+                            def response = readJSON text: apiResponse
 
                         if (response?.choices?.size() > 0) {
 
                                 def gptContent = response.choices[0].message.content ?: error("GPT response is empty")
 
-                                def htmlContent = """
+                                def htmlContent = """\
                                     <html>
-                                        <head>
-                                            <title>Security Report - AI Summary</title>
-                                        </head>
-                                        <body>
-                                            <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" height="80" alt="Jenkins Logo"/>
-                                            <div>${gptContent.replaceAll("\n", "<br/>")}</div>
-                                        </body>
+                                    <head>
+                                        <title>Security Report - Build Summary</title>
+                                        <style>
+                                        body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
+                                        h1, h2 { color: #2c3e50; }
+                                        .section { margin-bottom: 25px; }
+                                        .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; }
+                                        ul { margin-top: 0; }
+                                        .badge-ok { color: green; font-weight: bold; }
+                                        .badge-warn { color: orange; font-weight: bold; }
+                                        .badge-fail { color: red; font-weight: bold; }
+                                        </style>
+                                    </head>
+                                    <body>
+                                        <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+                                        
+                                        <h1>🔐 Security Scan Summary</h1>
+
+                                        <div class="section">
+                                        <h2>📘 Project Overview</h2>
+                                        <div class="highlight">
+                                            <p><strong>Project:</strong> ${projectName}</p>
+                                            <p><strong>Commit SHA:</strong> ${gitSha}</p>
+                                            <p><strong>Build Number:</strong> ${buildNumber}</p>
+                                        </div>
+                                        </div>
+
+                                        <div class="section">
+                                        <h2>🛡️ Trivy Scan Report</h2>
+                                        <p>The Trivy scan results are summarized below:</p>
+                                        <div class="highlight"><pre>${trivyShort.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre></div>
+                                        </div>
+
+                                        <div class="section">
+                                        <h2>🔍 Snyk Scan Report</h2>
+                                        <p><strong>Status:</strong> <span class="${badgeColor}">${badgeColor == 'badge-ok' ? 'OK' : 'Issues Found'}</span></p>
+                                        <p><strong>Key Findings:</strong></p>
+                                        <div class="highlight"><pre>${snykShort.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre></div>
+                                        </div>
+
+                                        <div class="section">
+                                        <h2>✅ AI Recommendations</h2>
+                                        <div class="highlight">
+                                            ${gptContent.replaceAll('\n', '<br/>')}
+                                        </div>
+                                        </div>
+
+                                        <footer style="margin-top: 40px; font-size: 0.9em; color: #888;">
+                                        <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+                                        </footer>
+                                    </body>
                                     </html>
                                     """
 
