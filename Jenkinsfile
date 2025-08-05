@@ -369,6 +369,10 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
 
+    if (!snykSummary?.trim()) {
+        snykSummary = "No high or critical vulnerabilities found by Snyk."
+    }   
+
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
 
@@ -488,10 +492,10 @@ def extractTopVulns(String jsonPath, String toolName) {
             script: """#!/bin/bash
                 jq -r '
                     .vulnerabilities? // [] |
-                    map(select(.severity == "high" or .severity == "critical")) |
+                    map(select(.severity == "high" or .severity == "critical" or .severity == "medium")) |
                     sort_by(.severity)[:5][] |
                     "* ID: \\(.id) | Title: \\(.title) [\\(.severity)] in \\(.name)"
-                ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
+                ' ${jsonPath} || echo "No high, critical or medium issues found in ${toolName}."
             """,
             returnStdout: true
         ).trim()
