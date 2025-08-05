@@ -252,62 +252,65 @@ pipeline {
 
                                 def gptContent = response.choices[0].message.content ?: error("GPT response is empty")
 
-                                def htmlContent = """\
-                                    <html>
-                                    <head>
-                                        <title>Security Report - Build Summary</title>
-                                        <style>
-                                        body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
-                                        h1, h2 { color: #2c3e50; }
-                                        .section { margin-bottom: 25px; }
-                                        .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; }
-                                        ul { margin-top: 0; }
-                                        .badge-ok { color: green; font-weight: bold; }
-                                        .badge-warn { color: orange; font-weight: bold; }
-                                        .badge-fail { color: red; font-weight: bold; }
-                                        </style>
-                                    </head>
-                                    <body>
-                                        <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-                                        
-                                        <h1>🔐 Security Scan Summary</h1>
+                               def trivySafe = trivyShort.replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+                                def snykSafe = snykShort.replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+                                def gptFormatted = gptContent.replaceAll("\\n", "<br/>")
+                                def statusClass = badgeColor == '✅' ? 'badge-ok' : 'badge-fail'
+                                def statusText = badgeColor == '✅' ? 'OK' : 'Issues Found'
 
-                                        <div class="section">
-                                        <h2>📘 Project Overview</h2>
-                                        <div class="highlight">
-                                            <p><strong>Project:</strong> ${projectName}</p>
-                                            <p><strong>Commit SHA:</strong> ${gitSha}</p>
-                                            <p><strong>Build Number:</strong> ${buildNumber}</p>
-                                        </div>
-                                        </div>
+                                def htmlContent = """
+                                        <html>
+                                        <head>
+                                            <title>Security Report - Build Summary</title>
+                                            <style>
+                                            body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
+                                            h1, h2 { color: #2c3e50; }
+                                            .section { margin-bottom: 25px; }
+                                            .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+                                            ul { margin-top: 0; }
+                                            .badge-ok { color: green; font-weight: bold; }
+                                            .badge-warn { color: orange; font-weight: bold; }
+                                            .badge-fail { color: red; font-weight: bold; }
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+                                            
+                                            <h1>🔐 Security Scan Summary</h1>
 
-                                        <div class="section">
-                                        <h2>🛡️ Trivy Scan Report</h2>
-                                        <p>The Trivy scan results are summarized below:</p>
-                                        <div class="highlight"><pre>${trivyShort.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre></div>
-                                        </div>
+                                            <div class="section">
+                                            <h2>📘 Project Overview</h2>
+                                            <div class="highlight">
+                                                <p><strong>Project:</strong> ${projectName}</p>
+                                                <p><strong>Commit SHA:</strong> ${gitSha}</p>
+                                                <p><strong>Build Number:</strong> ${buildNumber}</p>
+                                            </div>
+                                            </div>
 
-                                        <div class="section">
-                                        <h2>🔍 Snyk Scan Report</h2>
-                                        <p><strong>Status:</strong> <span class="${badgeColor}">${badgeColor == 'badge-ok' ? 'OK' : 'Issues Found'}</span></p>
-                                        <p><strong>Key Findings:</strong></p>
-                                        <div class="highlight"><pre>${snykShort.replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</pre></div>
-                                        </div>
+                                            <div class="section">
+                                            <h2>🛡️ Trivy Scan Report</h2>
+                                            <p><strong>Summary:</strong> This section provides an overview of file/image vulnerabilities detected.</p>
+                                            <div class="highlight">${trivySafe}</div>
+                                            </div>
 
-                                        <div class="section">
-                                        <h2>✅ AI Recommendations</h2>
-                                        <div class="highlight">
-                                            ${gptContent.replaceAll('\n', '<br/>')}
-                                        </div>
-                                        </div>
+                                            <div class="section">
+                                            <h2>🔍 Snyk Scan Report</h2>
+                                            <p><strong>Status:</strong> <span class="${statusClass}">${statusText}</span></p>
+                                            <p><strong>Summary:</strong> The following vulnerabilities or license issues were detected:</p>
+                                            <div class="highlight">${snykSafe}</div>
+                                            </div>
 
-                                        <footer style="margin-top: 40px; font-size: 0.9em; color: #888;">
-                                        <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
-                                        </footer>
-                                    </body>
-                                    </html>
-                                    """
+                                            <div class="section">
+                                            <h2>💡 AI Recommendations</h2>
+                                            <div class="highlight">${gptFormatted}</div>
+                                            </div>
 
+                                            <footer style="margin-top: 40px; font-size: 0.9em; color: #888;">
+                                            <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+                                            </footer>
+                                        </body>
+                                        </html>
+                                """
                                 writeFile file: gptReportFile, text: htmlContent
                             
                         } else {
@@ -337,7 +340,8 @@ pipeline {
         success {
             script {
                 if (fileExists("ai_report.html")) {
-                    sh "pandoc ai_report.html -f html -t pdf -o ${env.PDF_REPORT} --standalone --pdf-engine=wkhtmltopdf"
+                    // sh "pandoc ai_report.html -f html -t pdf -o ${env.PDF_REPORT} --standalone --pdf-engine=wkhtmltopdf"
+                    sh "wkhtmltopdf --zoom 1.3 --enable-local-file-access ai_report.html ai_report.pdf"
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
@@ -367,7 +371,7 @@ pipeline {
                                     </html>
                             """,
                         mimeType: 'text/html',
-                        attachmentsPattern: "${env.PDF_REPORT}",
+                        attachmentsPattern: 'ai_report.pdf',
                         to: 'naveenramlu@gmail.com',
                         attachLog: false
                     )
@@ -406,7 +410,7 @@ def runSnykScan(stageName, imageTag) {
             mkdir -p ${reportDir}
 
             snyk auth $SNYK_TOKEN
-            DEBUG=*snyk* snyk container test ${imageTag} --severity-threshold=high --exclude-base-image-vulns --json > ${jsonFile} || true
+            snyk container test ${imageTag} --severity-threshold=high --exclude-base-image-vulns --json > ${jsonFile} || true
 
             echo "<html><body><pre>" > ${htmlFile}
             if [ -s ${jsonFile} ]; then
