@@ -188,141 +188,125 @@ pipeline {
         stage('Generate GPT Report') {
             steps {
                 script {
-                    
-                    def projectName = "My Java App"
-                    def gitSha = env.COMMIT_SHA
-                    def buildNumber = env.BUILD_NUMBER
+                def projectName = "My Java App"
+                def gitSha = env.COMMIT_SHA
+                def buildNumber = env.BUILD_NUMBER
 
-                    def trivyPath = "reports/trivy/${buildNumber}/after-push/trivy-image-scan-${gitSha}.html"
-                    def snykPath = "reports/snyk/${buildNumber}/after-push/snyk-report-${gitSha}.json"
+                def trivyPath = "reports/trivy/${buildNumber}/after-push/trivy-image-scan-${gitSha}.html"
+                def snykPath = "reports/snyk/${buildNumber}/after-push/snyk-report-${gitSha}.json"
 
-                    def trivyScanOutput = readFile(trivyPath)
-                    def snykScanOutput = readFile(snykPath)
+                def trivyScanOutput = readFile(trivyPath)
+                def snykScanOutput = readFile(snykPath)
 
-                    def trivyShort = trivyScanOutput.take(2000)
-                    def snykShort = snykScanOutput.take(2000)
+                def trivyShort = trivyScanOutput.take(1000)
+                def snykShort = snykScanOutput.take(1000)
 
-                    def badgeColor = "badge-ok"
-                    if (trivyScanOutput.toLowerCase().contains("critical") ||
-                        trivyScanOutput.toLowerCase().contains("high") ||
-                        snykScanOutput.toLowerCase().contains("critical") ||
-                        snykScanOutput.toLowerCase().contains("high")) {
-                        badgeColor = "badge-fail"
-                    }
+                def badgeColor = "✅"
+                if (trivyScanOutput.toLowerCase().contains("critical") || snykScanOutput.toLowerCase().contains("critical") ||
+                    trivyScanOutput.toLowerCase().contains("high") || snykScanOutput.toLowerCase().contains("high")) {
+                    badgeColor = "❌"
+                }
 
-                    def prompt = """
-                        Summarize the following scan reports and return the output as valid HTML with <h2>, <p>, <ul>, <strong>, etc. Don't use Markdown syntax.
+                def prompt = """
+                Summarize the following Trivy and Snyk scan reports into an HTML report with <h2>, <ul>, <strong>, and <p> tags.
+                Do not use Markdown or code blocks. Focus on security insights, license risks, and suggestions.
 
-                        Project: ${projectName}
-                        Commit SHA: ${gitSha}
-                        Build Number: ${buildNumber}
+                Project: ${projectName}
+                Commit SHA: ${gitSha}
+                Build Number: ${buildNumber}
 
-                        Trivy Scan:
-                        ${trivyShort}
+                Trivy Scan (short excerpt):
+                ${trivyShort}
 
-                        Snyk Scan:
-                        ${snykShort}
-                    """
+                Snyk Scan (short excerpt):
+                ${snykShort}
+                """
 
-                    def promptFile = "openai_prompt.json"
-                    def fullResponseFile = "openai_response.json"
-                    def gptReportFile = "ai_report.html"
+                def gptPromptFile = "openai_prompt.json"
+                def gptOutputFile = "openai_response.json"
+                def gptReportFile = "ai_report.html"
 
-                    def payload = [
-                        model: "gpt-4o-mini",
-                        messages: [
-                            [role: "user", content: prompt]
-                        ]
-                    ]
+                def payload = [
+                    model: "gpt-4o-mini",
+                    messages: [[role: "user", content: prompt]]
+                ]
 
-                    writeFile file: promptFile, text: groovy.json.JsonOutput.toJson(payload)
+                writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
 
                     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-                            def apiResponse = sh(script: """
-                                curl -s https://api.openai.com/v1/chat/completions \\
-                                -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-                                -H "Content-Type: application/json" \\
-                                -d @${promptFile}
-                            """, returnStdout: true).trim()
+                        def responseJson = sh(script: """
+                        curl -s https://api.openai.com/v1/chat/completions \\
+                        -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+                        -H "Content-Type: application/json" \\
+                        -d @${gptPromptFile}
+                        """, returnStdout: true).trim()
 
-                            writeFile file: fullResponseFile, text: apiResponse
-                            def response = readJSON text: apiResponse
+                        writeFile file: gptOutputFile, text: responseJson
+                        def response = readJSON text: responseJson
+                        def gptContent = response.choices[0].message.content ?: error("Empty GPT content")
 
-                        if (response?.choices?.size() > 0) {
+                        def badgeClass = badgeColor == '✅' ? 'badge-ok' : 'badge-fail'
+                        def badgeLabel = badgeColor == '✅' ? 'OK' : 'Issues Found'
+                        def gptHtml = gptContent.replaceAll("\\n", "<br/>")
 
-                                def gptContent = response.choices[0].message.content ?: error("GPT response is empty")
+                        def htmlContent = """
+                        <html>
+                            <head>
+                                <title>Security Report - Build Summary</title>
+                                <style>
+                                body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
+                                h1, h2 { color: #2c3e50; }
+                                .section { margin-bottom: 25px; }
+                                .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+                                .badge-ok { color: green; font-weight: bold; }
+                                .badge-fail { color: red; font-weight: bold; }
+                                a { color: #2c3e50; text-decoration: underline; }
+                                </style>
+                            </head>
+                            <body>
+                                <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
 
-                               def trivySafe = trivyShort.replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-                                def snykSafe = snykShort.replaceAll("<", "&lt;").replaceAll(">", "&gt;")
-                                def gptFormatted = gptContent.replaceAll("\\n", "<br/>")
-                                def statusClass = badgeColor == '✅' ? 'badge-ok' : 'badge-fail'
-                                def statusText = badgeColor == '✅' ? 'OK' : 'Issues Found'
+                                <h1>🔐 Security Scan Summary</h1>
 
-                                def htmlContent = """
-                                        <html>
-                                        <head>
-                                            <title>Security Report - Build Summary</title>
-                                            <style>
-                                            body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
-                                            h1, h2 { color: #2c3e50; }
-                                            .section { margin-bottom: 25px; }
-                                            .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
-                                            ul { margin-top: 0; }
-                                            .badge-ok { color: green; font-weight: bold; }
-                                            .badge-warn { color: orange; font-weight: bold; }
-                                            .badge-fail { color: red; font-weight: bold; }
-                                            </style>
-                                        </head>
-                                        <body>
-                                            <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-                                            
-                                            <h1>🔐 Security Scan Summary</h1>
+                                <div class="section">
+                                <h2>📘 Project Overview</h2>
+                                <div class="highlight">
+                                    <p><strong>Project:</strong> ${projectName}</p>
+                                    <p><strong>Commit SHA:</strong> ${gitSha}</p>
+                                    <p><strong>Build Number:</strong> ${buildNumber}</p>
+                                </div>
+                                </div>
 
-                                            <div class="section">
-                                            <h2>📘 Project Overview</h2>
-                                            <div class="highlight">
-                                                <p><strong>Project:</strong> ${projectName}</p>
-                                                <p><strong>Commit SHA:</strong> ${gitSha}</p>
-                                                <p><strong>Build Number:</strong> ${buildNumber}</p>
-                                            </div>
-                                            </div>
+                                <div class="section">
+                                <h2>🛡️ Trivy Scan</h2>
+                                <p>Full Trivy scan results are archived. Please <a href="${env.BUILD_URL}artifact/${trivyPath}">click here</a> to view the detailed HTML report.</p>
+                                </div>
 
-                                            <div class="section">
-                                            <h2>🛡️ Trivy Scan Report</h2>
-                                            <p><strong>Summary:</strong> This section provides an overview of file/image vulnerabilities detected.</p>
-                                            <div class="highlight">${trivySafe}</div>
-                                            </div>
+                                <div class="section">
+                                <h2>🔍 Snyk Summary</h2>
+                                <p><strong>Status:</strong> <span class="${badgeClass}">${badgeLabel}</span></p>
+                                </div>
 
-                                            <div class="section">
-                                            <h2>🔍 Snyk Scan Report</h2>
-                                            <p><strong>Status:</strong> <span class="${statusClass}">${statusText}</span></p>
-                                            <p><strong>Summary:</strong> The following vulnerabilities or license issues were detected:</p>
-                                            <div class="highlight">${snykSafe}</div>
-                                            </div>
+                                <div class="section">
+                                <h2>💡 AI Recommendations</h2>
+                                <div class="highlight">${gptHtml}</div>
+                                </div>
 
-                                            <div class="section">
-                                            <h2>💡 AI Recommendations</h2>
-                                            <div class="highlight">${gptFormatted}</div>
-                                            </div>
+                                <footer style="margin-top: 40px; font-size: 0.9em; color: #888;">
+                                <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+                                </footer>
+                            </body>
+                        </html>
+                        """
 
-                                            <footer style="margin-top: 40px; font-size: 0.9em; color: #888;">
-                                            <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
-                                            </footer>
-                                        </body>
-                                        </html>
-                                """
-                                writeFile file: gptReportFile, text: htmlContent
-                            
-                        } else {
-                            error "GPT response missing choices or content."
-                        }
+
+
+                        writeFile file: gptReportFile, text: htmlContent
+                        echo "✅ GPT-based HTML report saved: ${gptReportFile}"
                     }
-
-                    echo "HTML GPT-based report generated: ${gptReportFile}"
                 }
             }
         }
-
     }
 
     post {
