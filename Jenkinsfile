@@ -310,13 +310,18 @@ def runSnykScan(stageName, imageTag) {
 
 def runTrivyScanUnified(stageName, scanTarget, scanType) {
     def reportDir = "reports/trivy/${env.BUILD_NUMBER}/${stageName}"
-    def reportFile = scanType == 'fs' 
+    def htmlReport = scanType == 'fs' 
         ? "${reportDir}/trivy-fs-scan-${env.COMMIT_SHA}.html"
         : "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.html"
 
+    def jsonReport = scanType == 'fs' 
+        ? "${reportDir}/trivy-fs-scan-${env.COMMIT_SHA}.json"
+        : "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.json"
+
     sh """
         mkdir -p ${reportDir}
-        trivy ${scanType} --format template --template "@contrib/html.tpl" -o ${reportFile} ${scanTarget}
+        trivy ${scanType} --format template --template "@contrib/html.tpl" -o ${htmlReport} ${scanTarget}
+        trivy ${scanType} --format json -o ${jsonReport} ${scanTarget}
     """
 
     publishHTML(target: [
@@ -327,9 +332,10 @@ def runTrivyScanUnified(stageName, scanTarget, scanType) {
         reportFiles: "*.html",
         reportName: "Trivy ${scanType == 'fs' ? 'File System' : 'Image'} Scan (${stageName}) - Build ${env.BUILD_NUMBER}"
     ])
-    
-    archiveArtifacts artifacts: "${reportDir}/*.html", allowEmptyArchive: true
+
+    archiveArtifacts artifacts: "${reportDir}/*.html,${reportDir}/*.json", allowEmptyArchive: true
 }
+
 
 def sendSlackNotification(String status, String color) {
     def emojiMap = [
