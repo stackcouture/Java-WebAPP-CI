@@ -188,77 +188,71 @@ pipeline {
         stage('Generate GPT Report') {
             steps {
                 script {
-                def projectName = "My Java App"
-                def gitSha = env.COMMIT_SHA
-                def buildNumber = env.BUILD_NUMBER
+                    def projectName = "My Java App"
+                    def gitSha = env.COMMIT_SHA
+                    def buildNumber = env.BUILD_NUMBER
 
-                def trivyPath = "reports/trivy/${buildNumber}/after-push/trivy-image-scan-${gitSha}.html"
-                def snykPath = "reports/snyk/${buildNumber}/after-push/snyk-report-${gitSha}.json"
+                    def trivyPath = "reports/trivy/${buildNumber}/after-push/trivy-image-scan-${gitSha}.html"
+                    def snykPath = "reports/snyk/${buildNumber}/after-push/snyk-report-${gitSha}.json"
 
-                def trivyScanOutput = readFile(trivyPath)
-                def snykScanOutput = readFile(snykPath)
+                    def trivyScanOutput = readFile(trivyPath)
+                    def snykScanOutput = readFile(snykPath)
 
-                def trivyShort = trivyScanOutput.take(2500)
-                def snykShort = snykScanOutput.take(2500)
+                    def trivyShort = trivyScanOutput.take(2500)
+                    def snykShort = snykScanOutput.take(2500)
 
-                def badgeColor = "✅"
-                if (trivyScanOutput.toLowerCase().contains("critical") || snykScanOutput.toLowerCase().contains("critical") ||
-                    trivyScanOutput.toLowerCase().contains("high") || snykScanOutput.toLowerCase().contains("high")) {
-                    badgeColor = "❌"
-                }
+                    def prompt = """
+                        You are a security analyst assistant.
 
-                def prompt = """
-                    You are a security analyst assistant.
+                        Based on the following Trivy and Snyk scan outputs, generate a structured and professional security report in valid HTML only. 
 
-                    Generate a well-structured HTML report based on the following Trivy and Snyk scan outputs. The report must:
+                        Your HTML must include:
 
-                    - Use valid HTML only (no Markdown or code blocks)
-                    - Structure content with <h2>, <ul>, <p>, and <strong> tags
-                    - Summarize vulnerabilities by severity (Critical, High, Medium)
-                    - Call out any license issues detected (e.g., GPL, AGPL, LGPL)
-                    - Provide 2–4 clear security recommendations
-                    - Use concise language suitable for DevOps or security teams
+                        - <h2>, <p>, <ul>, and <strong> tags only (no Markdown, no <code> or <pre> blocks)
+                        - Clear section headings: Project Overview, Vulnerabilities Summary, License Issues, and Recommendations
+                        - A line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
+                        - Summarize vulnerabilities by severity (Critical, High, Medium)
+                        - Mention any license issues like GPL, AGPL, LGPL if present
+                        - Give 2–4 recommendations in <ul> format
 
-                    Context:
-                    Project: ${projectName}
-                    Commit SHA: ${gitSha}
-                    Build Number: ${buildNumber}
+                        Context:
+                        Project: ${projectName}
+                        Commit SHA: ${gitSha}
+                        Build Number: ${buildNumber}
 
-                    --- Begin Trivy Scan Output (excerpt) ---
-                    ${trivyShort}
-                    --- End Trivy Scan Output ---
+                        --- Trivy Output (Excerpt) ---
+                        ${trivyShort}
+                        --- End ---
 
-                    --- Begin Snyk Scan Output (excerpt) ---
-                    ${snykShort}
-                    --- End Snyk Scan Output ---
-                """
+                        --- Snyk Output (Excerpt) ---
+                        ${snykShort}
+                        --- End ---
+                    """
 
-                def gptPromptFile = "openai_prompt.json"
-                def gptOutputFile = "openai_response.json"
-                def gptReportFile = "ai_report.html"
+                    def gptPromptFile = "openai_prompt.json"
+                    def gptOutputFile = "openai_response.json"
+                    def gptReportFile = "ai_report.html"
 
-                def payload = [
-                    model: "gpt-4o-mini",
-                    messages: [[role: "user", content: prompt]]
-                ]
+                    def payload = [
+                        model: "gpt-4o-mini",
+                        messages: [[role: "user", content: prompt]]
+                    ]
 
-                writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
+                    writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
 
                     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
                         def responseJson = sh(script: """
-                        curl -s https://api.openai.com/v1/chat/completions \\
-                        -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-                        -H "Content-Type: application/json" \\
-                        -d @${gptPromptFile}
+                            curl -s https://api.openai.com/v1/chat/completions \\
+                            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+                            -H "Content-Type: application/json" \\
+                            -d @${gptPromptFile}
                         """, returnStdout: true).trim()
 
                         writeFile file: gptOutputFile, text: responseJson
                         def response = readJSON text: responseJson
                         def gptContent = response.choices[0].message.content ?: error("Empty GPT content")
 
-                        def badgeClass = badgeColor == '✅' ? 'badge-ok' : 'badge-fail'
-                        def badgeLabel = badgeColor == '✅' ? 'OK' : 'Issues Found'
-                        def gptHtml = gptContent.trim()
+                        def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
 
                         def htmlContent = """
                             <!DOCTYPE html>
@@ -280,45 +274,36 @@ pipeline {
                             </head>
                             <body>
                                 <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-                                <h1>🔐 Security Scan Summary</h1>
-
-                                <div class="section">
-                                <h2>📘 Project Overview</h2>
-                                <div class="highlight">
-                                    <p><strong>Project:</strong> ${projectName}</p>
-                                    <p><strong>Commit SHA:</strong> ${gitSha}</p>
-                                    <p><strong>Build Number:</strong> ${buildNumber}</p>
-                                </div>
-                                </div>
+                                <h1>Security Scan Summary</h1>
                                 
                                 <div class="section">
-                                <h2>🛡️ Trivy Scan</h2>
+                                <h2>Trivy Scan</h2>
                                 <p>Full Trivy scan results are archived. Please <a href="${env.BUILD_URL}artifact/${trivyPath}">click here</a> to view the detailed HTML report.</p>
                                 </div>
 
                                 <div class="section">
-                                <h2>🔍 Snyk Summary</h2>
-                                <p><strong>Status:</strong> <span class="${badgeClass}">${badgeLabel}</span></p>
+                                <h2>Snyk Summary</h2>
+                                <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
                                 </div>
 
                                 <div class="section">
-                                <h2>💡 AI Recommendations</h2>
-                                <div class="highlight">${gptHtml}</div>
+                                <h2>AI Recommendations</h2>
+                                <div class="highlight">${gptContent}</div>
                                 </div>
 
-                                <footer style="margin-top: 40px; font-size: 0.9em; color: #888;">
+                                <footer>
                                 <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
                                 </footer>
                             </body>
                             </html>
-                            """
+                        """
 
                         writeFile file: gptReportFile, text: htmlContent
                         echo "GPT-based HTML report saved: ${gptReportFile}"
                     }
-                }
-            }
-        }
+                }   
+            } 
+        } 
     }
 
     post {
@@ -479,3 +464,10 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
+def parseStatusBadge(String gptContent) {
+    def matcher = gptContent =~ /(?i)<strong>Status:<\/strong>\s*(OK|Issues Found)/
+    def statusText = matcher.find() ? matcher.group(1).toUpperCase() : "Issues Found"
+    def badgeColor = statusText == "OK" ? "✅" : "❌"
+    def badgeClass = statusText == "OK" ? "badge-ok" : "badge-fail"
+    return [statusText, badgeColor, badgeClass]
+}
