@@ -261,39 +261,32 @@ pipeline {
                                             body {
                                                 font-family: Arial, sans-serif;
                                                 padding: 20px;
-                                                font-size: 20px;
-                                                line-height: 1.8;
-                                            }
-
-                                            h1 {
-                                                font-size: 32px;
-                                                color: #2c3e50;
-                                            }
-
-                                            h2 {
-                                                font-size: 26px;
-                                                color: #2c3e50;
-                                            }
-
-                                            h3 {
-                                                font-size: 22px;
-                                            }
-
-                                            .badge {
-                                                font-size: 20px;
-                                                font-weight: bold;
-                                            }
-
-                                            .meta, ul, li, span, p {
-                                                font-size: 20px;
-                                            }
-
-                                            pre {
                                                 font-size: 18px;
                                                 line-height: 1.8;
-                                                padding: 15px;
-                                                background: #f4f4f4;
-                                                border-left: 5px solid #ccc;
+                                            }
+                                            h1 {
+                                                font-size: 30px;
+                                                color: #2c3e50;
+                                            }
+                                            h2 {
+                                                font-size: 24px;
+                                                color: #2c3e50;
+                                            }
+                                            h3 {
+                                                font-size: 20px;
+                                            }
+                                            .badge {
+                                                font-size: 18px;
+                                                font-weight: bold;
+                                            }
+                                            .meta {
+                                                margin-bottom: 20px;
+                                            }
+                                            p, ul, li {
+                                                font-size: 18px;
+                                            }
+                                            ul {
+                                                padding-left: 20px;
                                             }
                                         </style>
                                     </head>
@@ -301,20 +294,20 @@ pipeline {
                                         <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" height="80" alt="Jenkins Logo"/>
                                         <h1>Security Scan Report Summary (AI-Generated)</h1>
                                         <div class="meta">
-                                            <strong>Project:</strong> ${projectName}<br>
-                                            <strong>Build Number:</strong> ${buildNumber}<br>
-                                            <strong>Commit SHA:</strong> ${gitSha}<br>
-                                            <strong>Status:</strong> <span class="badge">${badgeColor}</span>
+                                            <p><strong>Project:</strong> ${projectName}</p>
+                                            <p><strong>Build Number:</strong> ${buildNumber}</p>
+                                            <p><strong>Commit SHA:</strong> ${gitSha}</p>
+                                            <p><strong>Status:</strong> <span class="badge">${badgeColor}</span></p>
                                         </div>
 
-                                        
-                                        <h3>Scan results summarized below based on Trivy and Snyk data.</h3>
+                                        <h2>Summary</h2>
+                                        <p>Scan results summarized below based on Trivy and Snyk data.</p>
 
-                                        <h2 id="details">2. Detailed Analysis</h2>
-                                        <pre>${gptContent.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</pre>
+                                        <h2>Detailed Analysis</h2>
+                                        <div>${gptContent.replaceAll("\n", "<br/>").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</div>
                                     </body>
                                     </html>
-                                """
+                                    """
 
                                 writeFile file: gptReportFile, text: htmlContent
                             }
@@ -345,7 +338,7 @@ pipeline {
         success {
             script {
                 if (fileExists("ai_report.html")) {
-                    sh 'wkhtmltopdf --zoom 1.5 ai_report.html ai_report.pdf'
+                    sh 'wkhtmltopdf --zoom 1.25 ai_report.html ai_report.pdf'
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
@@ -365,95 +358,27 @@ pipeline {
                         attachLog: false
                     )
                 }
-
-                wrap([$class: 'BuildUser']) {
-                    slackSend(
-                        channel: env.SLACK_CHANNEL,
-                        token: env.SLACK_TOKEN,
-                        color: 'good',
-                        message: """\
-                            *Deployment Successful!*
-                            *Project:* `${env.JOB_NAME}`
-                            *Commit:* `${env.COMMIT_SHA}`
-                            *Build Number:* #${env.BUILD_NUMBER}
-                            *Branch:* `${params.BRANCH}`
-                            *Triggered By:* ${BUILD_USER} 👤
-                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
-                            _This is an automated notification from Jenkins 🤖_
-                            """
-                    )
-                }
+                sendSlackNotification('SUCCESS', 'good')
             }
         }
 
         failure {
             script {
-                 wrap([$class: 'BuildUser']) {
-                    slackSend(
-                        channel: env.SLACK_CHANNEL,
-                        token: env.SLACK_TOKEN,
-                        color: 'danger',
-                        message: """\
-                            *❌ FAILURE Deployment!*
-                            *Project:* `${env.JOB_NAME}`
-                            *Commit:* `${env.COMMIT_SHA}`
-                            *Build Number:* #${env.BUILD_NUMBER}
-                            *Branch:* `${params.BRANCH}`
-                            *Triggered By:* ${BUILD_USER} 👤
-                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
-                            _This is an automated notification from Jenkins 🤖_
-                            """
-                    )
-                }
+                sendSlackNotification('FAILURE', 'danger')
             }
         }
 
         unstable {
             script {
-                 wrap([$class: 'BuildUser']) {
-                    slackSend(
-                        channel: env.SLACK_CHANNEL,
-                        token: env.SLACK_TOKEN,
-                        color: 'warning',
-                        message: """\
-                            *⚠️ UNSTABLE Deployment!*
-                            *Project:* `${env.JOB_NAME}`
-                            *Commit:* `${env.COMMIT_SHA}`
-                            *Build Number:* #${env.BUILD_NUMBER}
-                            *Branch:* `${params.BRANCH}`
-                            *Triggered By:* ${BUILD_USER} 👤
-                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
-                            _This is an automated notification from Jenkins 🤖_
-                            """
-                    )
-                }
+                sendSlackNotification('UNSTABLE', 'warning')
             }
         }
 
         aborted {
             script {
-                  wrap([$class: 'BuildUser']) {
-                    slackSend(
-                        channel: env.SLACK_CHANNEL,
-                        token: env.SLACK_TOKEN,
-                        color: '#808080',
-                        message: """\
-                            *🛑 ABORTED Deployment!*
-                            *Project:* `${env.JOB_NAME}`
-                            *Commit:* `${env.COMMIT_SHA}`
-                            *Build Number:* #${env.BUILD_NUMBER}
-                            *Branch:* `${params.BRANCH}`
-                            *Triggered By:* ${BUILD_USER} 👤
-                            *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
-                            _This is an automated notification from Jenkins 🤖_
-                            """
-                    )
-                }
+                sendSlackNotification('ABORTED', '#808080')
             }
         }
-
-
-
     }
 }
 
@@ -508,5 +433,32 @@ def runTrivyScanUnified(stageName, scanTarget, scanType) {
     ])
     
     archiveArtifacts artifacts: "${reportDir}/*.html", allowEmptyArchive: true
+}
+
+def sendSlackNotification(String status, String color) {
+    def emojiMap = [
+        SUCCESS : "✅ Deployment Successful!",
+        FAILURE : "❌ FAILURE Deployment!",
+        UNSTABLE: "⚠️ UNSTABLE Deployment!",
+        ABORTED : "🛑 ABORTED Deployment!"
+    ]
+
+    wrap([$class: 'BuildUser']) {
+        slackSend(
+            channel: env.SLACK_CHANNEL,
+            token: env.SLACK_TOKEN,
+            color: color,
+            message: """\
+                *${emojiMap[status]}*
+                *Project:* `${env.JOB_NAME}`
+                *Commit:* `${env.COMMIT_SHA}`
+                *Build Number:* #${env.BUILD_NUMBER}
+                *Branch:* `${params.BRANCH}`
+                *Triggered By:* ${BUILD_USER} 👤
+                *Build Tag:* <${env.BUILD_URL}|Click to view in Jenkins>
+                _This is an automated notification from Jenkins 🤖_
+            """
+        )
+    }
 }
 
