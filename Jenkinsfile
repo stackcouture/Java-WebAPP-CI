@@ -483,3 +483,11 @@ def extractTopVulns(String jsonPath, String toolName) {
         returnStdout: true
     ).trim()
 }
+
+def parseStatusBadge(String gptContent) {
+    def matcher = gptContent =~ /(?i)<strong>Status:<\/strong>\s*(OK|Issues Found)/
+    def statusText = matcher.find() ? matcher.group(1).toUpperCase() : "ISSUES FOUND"
+    def badgeColor = statusText == "OK" ? "✅" : "❌"
+    def badgeClass = statusText == "OK" ? "badge-ok" : "badge-fail"
+    return [statusText, badgeColor, badgeClass]
+}
