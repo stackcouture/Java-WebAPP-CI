@@ -315,23 +315,20 @@ pipeline {
                 }
 
                 if (fileExists("ai_report.html")) {
-                    def htmlContent = readFile("ai_report.html")
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER}",
                           body: """
-                                <p>Hello Team,</p>
-                                <p>Please find the attached AI-generated <b>Security Report</b> for build #${env.BUILD_NUMBER}.</p>
-                                <p>Key highlights:</p>
-                                <ul>
-                                    <li>Project: <b>my-java-app</b></li>
-                                    <li>Git SHA: <b>${env.COMMIT_SHA}</b></li>
-                                </ul>
-                                <p>For full details, open the <b>ai_report.html</b> attachment.</p>
-                                <hr/>
-                                <small>This is an automated message from Jenkins CI.</small>
+                                Hello Team,
+
+                                The AI-generated security report for Build #${env.BUILD_NUMBER} is attached as an HTML file.
+
+                                Please download and open it in a browser for better readability.
+
+                                Regards,
+                                Jenkins
                             """,
-                        mimeType: 'text/html',
+                        mimeType: 'text/plain',
                         attachmentsPattern: 'ai_report.html',
                         to: 'naveenramlu@gmail.com',
                         attachLog: false
