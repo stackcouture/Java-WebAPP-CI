@@ -315,18 +315,29 @@ pipeline {
                 }
 
                 if (fileExists("ai_report.html")) {
-                    echo "Found ai_report.html"
                     def htmlContent = readFile("ai_report.html")
-                    echo "HTML content length: ${htmlContent.length()}"
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER}",
-                        htmlBody: htmlContent,
+                          body: """
+                                <p>Hello Team,</p>
+                                <p>Please find the attached AI-generated <b>Security Report</b> for build #${env.BUILD_NUMBER}.</p>
+                                <p>Key highlights:</p>
+                                <ul>
+                                    <li>Project: <b>my-java-app</b></li>
+                                    <li>Git SHA: <b>${env.COMMIT_SHA}</b></li>
+                                </ul>
+                                <p>For full details, open the <b>ai_report.html</b> attachment.</p>
+                                <hr/>
+                                <small>This is an automated message from Jenkins CI.</small>
+                            """,
                         mimeType: 'text/html',
-                        to: 'naveenramlu@gmail.com'
+                        attachmentsPattern: 'ai_report.html',
+                        to: 'naveenramlu@gmail.com',
+                        attachLog: false
                     )
                 } else {
-                    echo "❌ ai_report.html not found"
+                    echo "ai_report.html not found"
                 }
             }
         }
