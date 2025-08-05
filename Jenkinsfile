@@ -208,7 +208,7 @@ pipeline {
                     }
 
                     def prompt = """
-                        Summarize the following security scan results and highlight risks and suggestions:
+                        Summarize the following scan reports and return the output as valid HTML with <h2>, <p>, <ul>, <strong>, etc. Don't use Markdown syntax.
 
                         Project: ${projectName}
                         Commit SHA: ${gitSha}
@@ -224,6 +224,7 @@ pipeline {
                     def promptFile = "openai_prompt.json"
                     def fullResponseFile = "openai_response.json"
                     def gptReportFile = "ai_report.html"
+                    def pdfReportFile = "ai_report.pdf"
 
                     def payload = [
                         model: "gpt-4o-mini",
@@ -243,15 +244,11 @@ pipeline {
                         """, returnStdout: true).trim()
 
                         writeFile file: fullResponseFile, text: apiResponse
-                        echo "OpenAI API Response: ${apiResponse}"
-
                         def response = readJSON text: apiResponse
+
                         if (response?.choices?.size() > 0) {
-                            def gptContent = response.choices[0].message.content
-                            if (!gptContent) {
-                                error "GPT response does not contain content."
-                            } else {
-                                echo "GPT response received."
+
+                                def gptContent = response.choices[0].message.content ?: error("GPT response is empty")
 
                                 def htmlContent = """
                                     <html>
@@ -285,9 +282,6 @@ pipeline {
                                             p, ul, li {
                                                 font-size: 18px;
                                             }
-                                            ul {
-                                                padding-left: 20px;
-                                            }
                                         </style>
                                     </head>
                                     <body>
@@ -299,18 +293,17 @@ pipeline {
                                             <p><strong>Commit SHA:</strong> ${gitSha}</p>
                                             <p><strong>Status:</strong> <span class="badge">${badgeColor}</span></p>
                                         </div>
-
                                         <h2>Summary</h2>
                                         <p>Scan results summarized below based on Trivy and Snyk data.</p>
 
-                                        <h2>Detailed Analysis</h2>
-                                        <div>${gptContent.replaceAll("\n", "<br/>").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</div>
+                                        <h3>Detailed Analysis</h3>
+                                        <div>${gptContent.replaceAll("\n", "<br/>")}</div>
                                     </body>
                                     </html>
                                     """
 
                                 writeFile file: gptReportFile, text: htmlContent
-                            }
+                            
                         } else {
                             error "GPT response missing choices or content."
                         }
@@ -338,7 +331,7 @@ pipeline {
         success {
             script {
                 if (fileExists("ai_report.html")) {
-                    sh 'wkhtmltopdf --zoom 1.25 ai_report.html ai_report.pdf'
+                    sh "pandoc ai_report.html -f html -t pdf -o ${pdfReportFile} --standalone --pdf-engine=wkhtmltopdf"
 
                     emailext(
                         subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
@@ -347,7 +340,7 @@ pipeline {
 
                                 The AI-generated security report for Build #${env.BUILD_NUMBER} is attached as an HTML file.
 
-                                Please download and open it in a browser for better readability.
+                                Please review the scan summary for Trivy and Snyk.
 
                                 Regards,
                                 Jenkins
