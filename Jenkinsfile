@@ -472,15 +472,14 @@ def extractTopVulns(String jsonPath, String toolName) {
     if (!fileExists(jsonPath)) return "${toolName} JSON file not found."
 
     return sh(
-        script: '''#!/bin/bash
+        script: """#!/bin/bash
             jq -r '
                 .Results[]?.Vulnerabilities? // [] |
                 map(select(.Severity=="HIGH" or .Severity=="CRITICAL")) |
                 sort_by(.Severity)[:5][] |
-                "* \(.VulnerabilityID): \(.Title) [\(.Severity)] in \(.PkgName)"
-            ' ''' + jsonPath + ''' || echo "No high or critical issues found in ${toolName}."
-        ''',
+                "* \\(.VulnerabilityID): \\(.Title) [\\(.Severity)] in \\(.PkgName)"
+            ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
+        """,
         returnStdout: true
     ).trim()
 }
-
