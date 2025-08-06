@@ -445,6 +445,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     }
 
     def sonarSummary = getSonarQubeSummary()
+    def sonarIssues = sonarSummary?.codeSmells + sonarSummary?.vulnerabilities
 
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
@@ -471,7 +472,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Scan Status Summary:
     - Trivy: ${trivyStatus}
     - Snyk: ${snykStatus}
-    - SonarQube: ${sonarSummary}
+    - SonarQube: ${sonarSummary.qualityGateSummary}
 
     --- Trivy Top Issues ---
     ${trivySummary}
@@ -480,7 +481,12 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     ${snykSummary}
 
     --- SonarQube Issues ---
-    ${sonarSummary}
+    
+    Code Smells:
+    ${sonarSummary.codeSmells.collect { it.message }.join("\n")}
+
+    Vulnerabilities:
+    ${sonarSummary.vulnerabilities.collect { it.message }.join("\n")}
 
     """
     echo "GPT Prompt:\n${prompt}"
@@ -574,12 +580,12 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
                     <h2>SonarQube Issues</h2>
                     <h3>Code Smells</h3>
                     <ul>
-                        ${formatSonarQubeIssues(sonarSummary.issues.codeSmells)}
+                        ${formatSonarQubeIssues(sonarSummary.codeSmells)}
                     </ul>
 
                     <h3>Vulnerabilities</h3>
                     <ul>
-                        ${formatSonarQubeIssues(sonarSummary.issues.vulnerabilities)}
+                         ${formatSonarQubeIssues(sonarSummary.vulnerabilities)}
                     </ul>
                 </div>
 
@@ -655,7 +661,7 @@ def parseStatusBadge(String gptContent) {
 
 def getSonarQubeSummary() {
     def projectKey = "Java-App"
-    def sonarHost = "http://13.127.121.234:9000"
+    def sonarHost = "http://3.110.120.130:9000"
 
     // Get project status (quality gate)
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
@@ -697,20 +703,6 @@ def getSonarQubeSummary() {
         }
     }
 
-    def codeSmellSummary = codeSmells.isEmpty() ? "No code smells found" : codeSmells
-    def vulnerabilitySummary = vulnerabilities.isEmpty() ? "No vulnerabilities found" : vulnerabilities
-
-    // Construct the final JSON object for SonarQube summary
-    def summaryJson = [
-        "qualityGate": [
-            "status": qualityGateStatus,
-            "summary": qualityGateSummary
-        ],
-        "issues": [
-            "codeSmells": codeSmellSummary,
-            "vulnerabilities": vulnerabilitySummary
-        ]
-    ]
-
-    return JsonOutput.toJson(summaryJson)
+    return [codeSmells: codeSmells, vulnerabilities: vulnerabilities, qualityGateSummary: qualityGateSummary, qualityGateStatus: qualityGateStatus]
 }
+
