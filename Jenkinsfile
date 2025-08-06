@@ -247,7 +247,7 @@ pipeline {
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
                        // runGptSecuritySummary("My Java App", env.COMMIT_SHA, env.BUILD_NUMBER, trivyHtmlPath, snykJsonPath)
                         runGptSecuritySummary(
-                            "Java-App", 
+                            "my-app", 
                             env.COMMIT_SHA, 
                             env.BUILD_NUMBER, 
                             trivyHtmlPath, 
@@ -435,324 +435,321 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-// def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarProjectKey, String sonarHost, String sonarToken) {
-//     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
-//     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
-//     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
-
-//     def trivyStatus = (
-//         trivySummary.toLowerCase().contains("no high") ||
-//         trivySummary.toLowerCase().contains("no critical")
-//     ) ? "OK" : "Issues Found"
-
-//     def snykLower = snykSummary.toLowerCase()
-//     def snykStatus = (
-//         snykLower.contains("no high") &&
-//         snykLower.contains("no critical") &&
-//         snykLower.contains("no medium")
-//     ) ? "OK" : "Issues Found"
-
-//     if (!snykSummary?.trim()) {
-//         snykSummary = "No high or critical vulnerabilities found by Snyk."
-//         snykStatus = "OK"
-//     }
-
-//     // ✅ Pass sonarProjectKey, sonarHost, and sonarToken
-//     def sonarSummary = getSonarQubeSummary(sonarProjectKey, sonarHost, sonarToken)
-//     def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
-//     def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
-
-//     echo "Trivy Summary:\n${trivySummary}"
-//     echo "Snyk Summary:\n${snykSummary}"
-//     echo "SonarQube Summary:\n${sonarSummary.qualityGateSummary}"
-
-//     def prompt = """
-//     You are a security analyst assistant.
-
-//     Generate a clean HTML security report based on the following scan data. Use only <h2>, <ul>, <p>, and <strong> tags. Avoid Markdown or code blocks.
-
-//     Include these sections:
-//     - Project Overview (project name, SHA, build number)
-//     - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
-//     - Code Smells Summary
-//     - License Issues (e.g., GPL, AGPL, LGPL)
-//     - Recommendations (2–4 practical points)
-//     - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
-
-//     Context:
-//     Project: ${projectName}
-//     Commit SHA: ${gitSha}
-//     Build Number: ${buildNumber}
-
-//     Scan Status Summary:
-//     - Trivy: ${trivyStatus}
-//     - Snyk: ${snykStatus}
-//     - SonarQube: ${sonarSummary.qualityGateSummary}
-
-//     --- Trivy Top Issues ---
-//     ${trivySummary}
-
-//     --- Snyk Top Issues ---
-//     ${snykSummary}
-
-//     --- SonarQube Issues ---
-//     Code Smells:
-//     ${sonarCodeSmellsSummary}
-
-//     Vulnerabilities:
-//     ${sonarVulnerabilitiesSummary}
-//     """
-
-//     def gptPromptFile = "openai_prompt.json"
-//     def gptOutputFile = "openai_response.json"
-//     def gptReportFile = "ai_report.html"
-
-//     def payload = [
-//         model: "gpt-4o-mini",
-//         messages: [[role: "user", content: prompt]]
-//     ]
-
-//     writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
-
-//     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-//         def responseJson = sh(script: """
-//             curl -s https://api.openai.com/v1/chat/completions \\
-//             -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-//             -H "Content-Type: application/json" \\
-//             -d @${gptPromptFile}
-//         """, returnStdout: true).trim()
-
-//         echo "Response from OpenAI API: ${responseJson}"
-
-//         if (!responseJson) {
-//             error("Received empty or invalid response from OpenAI API")
-//         }
-
-//         writeFile file: gptOutputFile, text: responseJson
-
-//         try {
-//             def response = readJSON text: responseJson
-//             def gptContent = response?.choices?.get(0)?.message?.content
-
-//             if (!gptContent) {
-//                 error("GPT response is missing the expected content field")
-//             }
-
-//             gptContent = gptContent
-//                 .replaceAll(/(?m)^```html\s*/, "")
-//                 .replaceAll(/(?m)^```$/, "")
-//                 .trim()
-
-//             def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
-
-//             def htmlContent = """
-//             <!DOCTYPE html>
-//             <html>
-//             <head>
-//                 <meta charset="UTF-8">
-//                 <title>Security Report - Build Summary</title>
-//                 <style>
-//                     body { font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 40px; }
-//                     h1, h2 { color: #2c3e50; }
-//                     .section { margin-bottom: 25px; }
-//                     ul { margin-top: 0; padding-left: 20px; }
-//                     .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
-//                     .badge-ok { color: green; font-weight: bold; }
-//                     .badge-fail { color: red; font-weight: bold; }
-//                     a { color: #2c3e50; text-decoration: underline; }
-//                     footer { margin-top: 40px; font-size: 0.9em; color: #888; }
-//                 </style>
-//             </head>
-//             <body>
-//                 <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-//                 <h1>Security Scan Summary</h1>
-
-//                 <div class="section">
-//                     <h2>Trivy Scan</h2>
-//                     <p>Full Trivy scan results are archived. <a href="${env.BUILD_URL}artifact/${trivyHtmlPath}">View full report</a></p>
-//                 </div>
-
-//                 <div class="section">
-//                     <h2>Snyk Summary</h2>
-//                     <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
-//                 </div>
-
-//                 <div class="section">
-//                     <h2>SonarQube Issues</h2>
-//                     <h3>Code Smells</h3>
-//                     <ul>
-//                         ${formatSonarQubeIssues(sonarSummary.codeSmells)}
-//                     </ul>
-
-//                     <h3>Vulnerabilities</h3>
-//                     <ul>
-//                          ${formatSonarQubeIssues(sonarSummary.vulnerabilities)}
-//                     </ul>
-//                 </div>
-
-//                 <div class="section">
-//                     <h2>AI Recommendations</h2>
-//                     <div class="highlight">
-//                         ${gptContent}
-//                     </div>
-//                 </div>
-
-//                 <footer>
-//                     <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
-//                 </footer>
-//             </body>
-//             </html>
-//             """
-//             writeFile file: gptReportFile, text: htmlContent
-//             echo "AI-powered GPT report generated: ${gptReportFile}"
-//         } catch (Exception e) {
-//             error("Failed to parse or process the GPT response: ${e.getMessage()}")
-//         }
-//     }
-// }
-
 def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarProjectKey, String sonarHost, String sonarToken) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
-    def sonarSummary = getSonarQubeSummary(sonarHost, sonarProjectKey, sonarToken)
+
+    def trivyStatus = (
+        trivySummary.toLowerCase().contains("no high") ||
+        trivySummary.toLowerCase().contains("no critical")
+    ) ? "OK" : "Issues Found"
+
+    def snykLower = snykSummary.toLowerCase()
+    def snykStatus = (
+        snykLower.contains("no high") &&
+        snykLower.contains("no critical") &&
+        snykLower.contains("no medium")
+    ) ? "OK" : "Issues Found"
+
+    if (!snykSummary?.trim()) {
+        snykSummary = "No high or critical vulnerabilities found by Snyk."
+        snykStatus = "OK"
+    }
+
+    // ✅ Pass sonarProjectKey, sonarHost, and sonarToken
+    def sonarSummary = getSonarQubeSummary(sonarProjectKey, sonarHost, sonarToken)
+    def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
+    def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
+
+    echo "Trivy Summary:\n${trivySummary}"
+    echo "Snyk Summary:\n${snykSummary}"
+    echo "SonarQube Summary:\n${sonarSummary.qualityGateSummary}"
 
     def prompt = """
-You are a security analyst AI that summarizes vulnerability scan results into a professional HTML report.
-Summarize the following in structured HTML format using <h2>, <ul>, <p>, and <strong> tags:
+    You are a security analyst assistant.
 
-1. <h2>Trivy Summary</h2>: List top 5 vulnerabilities with CVE ID, severity, package name, and description. Add practical recommendations if possible.
-2. <h2>Snyk Summary</h2>: List top 5 vulnerabilities with title, severity, and recommendations.
-3. <h2>SonarQube Summary</h2>: Include quality gate status, total vulnerabilities, and code smells with short advice.
+    Generate a clean HTML security report based on the following scan data. Use only <h2>, <ul>, <p>, and <strong> tags. Avoid Markdown or code blocks.
 
-Format:
-- Do not return Markdown or code block syntax.
-- Begin with a <h2>Security Scan Summary</h2> section.
-- At the end, include a status badge like "<strong>Status:</strong> OK" or "<strong>Status:</strong> Issues Found".
+    Include these sections:
+    - Project Overview (project name, SHA, build number)
+    - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
+    - Code Smells Summary
+    - License Issues (e.g., GPL, AGPL, LGPL)
+    - Recommendations (2–4 practical points)
+    - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
 
-Trivy Scan Output:
-${trivySummary}
+    Context:
+    Project: ${projectName}
+    Commit SHA: ${gitSha}
+    Build Number: ${buildNumber}
 
-Snyk Scan Output:
-${snykSummary}
+    Scan Status Summary:
+    - Trivy: ${trivyStatus}
+    - Snyk: ${snykStatus}
+    - SonarQube: ${sonarSummary.qualityGateSummary}
 
-SonarQube Summary:
-Quality Gate: ${sonarSummary.qualityGateStatus}
-Vulnerabilities: ${sonarSummary.vulnerabilities}
-Code Smells: ${sonarSummary.codeSmells}
-""".stripIndent().trim()
+    --- Trivy Top Issues ---
+    ${trivySummary}
 
-    def gptContent = ""
-    try {
-        gptContent = openai.chat.completions.create([
-            model: "gpt-4o",
-            messages: [[role: "user", content: prompt]],
-            temperature: 0.3
-        ]).choices[0]?.message?.content ?: "No response from GPT"
-    } catch (Exception e) {
-        echo "Error from GPT API: ${e.message}"
-        gptContent = "<p>Unable to generate AI summary due to API error.</p>"
+    --- Snyk Top Issues ---
+    ${snykSummary}
+
+    --- SonarQube Issues ---
+    Code Smells:
+    ${sonarCodeSmellsSummary}
+
+    Vulnerabilities:
+    ${sonarVulnerabilitiesSummary}
+    """
+
+    def gptPromptFile = "openai_prompt.json"
+    def gptOutputFile = "openai_response.json"
+    def gptReportFile = "ai_report.html"
+
+    def payload = [
+        model: "gpt-4o-mini",
+        messages: [[role: "user", content: prompt]]
+    ]
+
+    writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
+
+    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+        def responseJson = sh(script: """
+            curl -s https://api.openai.com/v1/chat/completions \\
+            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+            -H "Content-Type: application/json" \\
+            -d @${gptPromptFile}
+        """, returnStdout: true).trim()
+
+        echo "Response from OpenAI API: ${responseJson}"
+
+        if (!responseJson) {
+            error("Received empty or invalid response from OpenAI API")
+        }
+
+        writeFile file: gptOutputFile, text: responseJson
+
+        try {
+            def response = readJSON text: responseJson
+            def gptContent = response?.choices?.get(0)?.message?.content
+
+            if (!gptContent) {
+                error("GPT response is missing the expected content field")
+            }
+
+            gptContent = gptContent
+                .replaceAll(/(?m)^```html\s*/, "")
+                .replaceAll(/(?m)^```$/, "")
+                .trim()
+
+            def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
+
+            def htmlContent = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Security Report - Build Summary</title>
+                <style>
+                    body { font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 40px; }
+                    h1, h2 { color: #2c3e50; }
+                    .section { margin-bottom: 25px; }
+                    ul { margin-top: 0; padding-left: 20px; }
+                    .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+                    .badge-ok { color: green; font-weight: bold; }
+                    .badge-fail { color: red; font-weight: bold; }
+                    a { color: #2c3e50; text-decoration: underline; }
+                    footer { margin-top: 40px; font-size: 0.9em; color: #888; }
+                </style>
+            </head>
+            <body>
+                <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+                <h1>Security Scan Summary</h1>
+
+                <div class="section">
+                    <h2>Trivy Scan</h2>
+                    <p>Full Trivy scan results are archived. <a href="${env.BUILD_URL}artifact/${trivyHtmlPath}">View full report</a></p>
+                </div>
+
+                <div class="section">
+                    <h2>Snyk Summary</h2>
+                    <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
+                </div>
+
+                <div class="section">
+                    <h2>SonarQube Issues</h2>
+                    <h3>Code Smells</h3>
+                    <ul>
+                        ${formatSonarQubeIssues(sonarSummary.codeSmells)}
+                    </ul>
+
+                    <h3>Vulnerabilities</h3>
+                    <ul>
+                         ${formatSonarQubeIssues(sonarSummary.vulnerabilities)}
+                    </ul>
+                </div>
+
+                <div class="section">
+                    <h2>AI Recommendations</h2>
+                    <div class="highlight">
+                        ${gptContent}
+                    </div>
+                </div>
+
+                <footer>
+                    <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+                </footer>
+            </body>
+            </html>
+            """
+            writeFile file: gptReportFile, text: htmlContent
+            echo "AI-powered GPT report generated: ${gptReportFile}"
+        } catch (Exception e) {
+            error("Failed to parse or process the GPT response: ${e.getMessage()}")
+        }
     }
-
-    // Clean GPT output
-    gptContent = gptContent
-        .replaceAll(/(?m)^```html\s*/, "")
-        .replaceAll(/(?m)^```$/, "")
-        .trim()
-
-    // Badge and status logic
-    def (statusText, badgeEmoji, badgeClass) = parseStatusBadge(gptContent)
-
-    // Compose final HTML report
-    def gptReportFile = "${env.WORKSPACE}/ai_report.html"
-    writeFile file: gptReportFile, text: """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Security Scan Summary</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    .badge-ok { color: white; background-color: green; padding: 5px 10px; border-radius: 5px; }
-    .badge-fail { color: white; background-color: red; padding: 5px 10px; border-radius: 5px; }
-    h2 { color: #2c3e50; }
-    ul { padding-left: 20px; }
-    p, li { font-size: 14px; }
-    .meta { font-size: 13px; color: #555; margin-bottom: 10px; }
-  </style>
-</head>
-<body>
-  <h1>Security Scan Summary</h1>
-  <p class="meta"><strong>Project:</strong> ${projectName} | <strong>Build #</strong> ${buildNumber} | <strong>Commit:</strong> ${gitSha}</p>
-  <p><span class="${badgeClass}">${badgeEmoji} ${statusText}</span></p>
-
-  ${extractHtmlSection(gptContent, "Trivy Summary")}
-  ${extractHtmlSection(gptContent, "Snyk Summary")}
-  ${extractHtmlSection(gptContent, "SonarQube Summary")}
-</body>
-</html>
-"""
-
-    echo "✅ AI Security Report written to: ${gptReportFile}"
-    return gptReportFile
 }
 
 
-def extractTopVulns(String jsonPath, String tool) {
-    def summary = ""
-    if (!fileExists(jsonPath)) return "No ${tool} scan data available."
 
-    def cmd = (tool == "Trivy") ?
-        "jq -r '.Results[].Vulnerabilities[] | [.VulnerabilityID, .PkgName, .Severity, .Title] | @tsv' ${jsonPath} | head -n 5" :
-        "jq -r '.vulnerabilities[] | [.id, .packageName, .severity, .title] | @tsv' ${jsonPath} | head -n 5"
+def formatSonarQubeIssues(issues) {
+    return issues.collect { issue ->
+        "<li><strong>${issue.severity}:</strong> ${issue.message} | <strong>Component:</strong> ${issue.component}</li>"
+    }.join("\n")
+}
 
-    def result = sh(script: cmd, returnStdout: true).trim()
+def extractTopVulns(String jsonPath, String toolName) {
+    if (!fileExists(jsonPath) || readFile(jsonPath).trim().isEmpty()) {
+        return "${toolName} JSON file not found or is empty."
+    }
 
-    if (result) {
-        summary = result.split('\n').collect { line ->
-            def (id, pkg, severity, title) = line.split('\t')
-            return "- ID: ${id}, Package: ${pkg}, Severity: ${severity}, Title: ${title}"
-        }.join("\n")
+   if (toolName == "Snyk") {
+        return sh(
+            script: """#!/bin/bash
+                jq -r '
+                    .vulnerabilities? // [] |
+                    map(select(.severity == "high" or .severity == "critical" or .severity == "medium")) |
+                    sort_by(.severity)[:5][] |
+                    "* ID: \\(.id) | Title: \\(.title) [\\(.severity)] in \\(.name)"
+                ' ${jsonPath} || echo "No high, critical or medium issues found in ${toolName}."
+            """,
+            returnStdout: true
+        ).trim()
+    } else if (toolName == "Trivy") {
+        return sh(
+            script: """#!/bin/bash
+                jq -r '
+                    .Results[]?.Vulnerabilities? // [] |
+                    map(select(.Severity == "HIGH" or .Severity == "CRITICAL")) |
+                    sort_by(.Severity)[:5][] |
+                    "* ID: \\(.VulnerabilityID) | Title: \\(.Title) [\\(.Severity)] in \\(.PkgName)"
+                ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
+            """,
+            returnStdout: true
+        ).trim()
     } else {
-        summary = "No top vulnerabilities found in ${tool} scan."
-    }
-    return summary
-}
-
-def getSonarQubeSummary(String sonarHost, String projectKey, String token) {
-    try {
-        def projectStatus = sh(
-            script: """curl -s -u "${token}:" "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}" """,
-            returnStdout: true
-        ).trim()
-        def issues = sh(
-            script: """curl -s -u "${token}:" "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=VULNERABILITY,CODE_SMELL&ps=100""",
-            returnStdout: true
-        ).trim()
-
-        def statusJson = readJSON text: projectStatus
-        def issuesJson = readJSON text: issues
-
-        def qgStatus = statusJson.projectStatus.status ?: "UNKNOWN"
-        def vulnCount = issuesJson.issues.count { it.type == "VULNERABILITY" }
-        def smellCount = issuesJson.issues.count { it.type == "CODE_SMELL" }
-
-        return [qualityGateStatus: qgStatus, vulnerabilities: vulnCount, codeSmells: smellCount]
-    } catch (Exception e) {
-        echo "SonarQube summary error: ${e.message}"
-        return [qualityGateStatus: "UNKNOWN", vulnerabilities: 0, codeSmells: 0]
+        return "Unsupported tool: ${toolName}"
     }
 }
 
 def parseStatusBadge(String gptContent) {
+    echo "Raw GPT content for badge parsing:\n${gptContent}"
     def matcher = gptContent =~ /(?i)<strong>Status:<\/strong>\s*(OK|Issues Found)/
     def statusText = matcher.find() ? matcher.group(1).toUpperCase() : "ISSUES FOUND"
-    def badgeEmoji = statusText == "OK" ? "✅" : "❌"
+    def badgeColor = statusText == "OK" ? "✅" : "❌"
     def badgeClass = statusText == "OK" ? "badge-ok" : "badge-fail"
-    return [statusText, badgeEmoji, badgeClass]
+    return [statusText, badgeColor, badgeClass]
 }
 
-def extractHtmlSection(String html, String title) {
-    def matcher = html =~ "(?s)<h2>${title}<\\/h2>(.*?)(?=<h2>|<\\/body>|\\z)"
-    return matcher ? matcher[0][1].trim() : "<p>No data found for ${title}.</p>"
+def getSonarQubeSummary(String projectKey, String sonarHost, String sonarToken) {
+    def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
+    def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
+
+    def qualityGateJson = null
+    def issuesJson = null
+
+    try {
+        def qualityGateResponse = sh(
+            script: "curl -sf -u ${sonarToken}: ${apiQualityGateUrl}",
+            returnStdout: true
+        ).trim()
+
+        if (!qualityGateResponse) {
+            echo "Empty response from SonarQube Quality Gate API: ${apiQualityGateUrl}"
+            return getSonarFallbackResult()
+        }
+
+        qualityGateJson = readJSON text: qualityGateResponse
+
+    } catch (Exception e) {
+        echo "Error fetching or parsing SonarQube Quality Gate response: ${e.message}"
+        return getSonarFallbackResult()
+    }
+
+    try {
+        def issuesResponse = sh(
+            script: "curl -sf -u ${sonarToken}: ${apiIssuesUrl}",
+            returnStdout: true
+        ).trim()
+
+        if (!issuesResponse) {
+            echo "Empty response from SonarQube Issues API: ${apiIssuesUrl}"
+            return getSonarFallbackResult()
+        }
+
+        issuesJson = readJSON text: issuesResponse
+
+    } catch (Exception e) {
+        echo "Error fetching or parsing SonarQube Issues response: ${e.message}"
+        return getSonarFallbackResult()
+    }
+
+    def issues = issuesJson.issues ?: []
+
+    def codeSmells = issues.findAll { it.type == 'CODE_SMELL' }.collect {
+        [
+            severity: it.severity,
+            message: it.message
+        ]
+    }
+
+    def vulnerabilities = issues.findAll { it.type == 'VULNERABILITY' }.collect {
+        [
+            severity: it.severity,
+            message: it.message
+        ]
+    }
+
+    def sonarCodeSmellsSummary = codeSmells.collect {
+        "Severity: ${it.severity}, Message: ${it.message}"
+    }.join("\n")
+
+    def sonarVulnerabilitiesSummary = vulnerabilities.collect {
+        "Severity: ${it.severity}, Message: ${it.message}"
+    }.join("\n")
+
+    def qualityGateStatus = qualityGateJson?.projectStatus?.status ?: "UNKNOWN"
+    def qualityGateSummary = "Quality Gate Status: ${qualityGateStatus}"
+
+    return [
+        codeSmells: codeSmells,
+        vulnerabilities: vulnerabilities,
+        qualityGateSummary: qualityGateSummary,
+        qualityGateStatus: qualityGateStatus,
+        sonarCodeSmellsSummary: sonarCodeSmellsSummary,
+        sonarVulnerabilitiesSummary: sonarVulnerabilitiesSummary
+    ]
+}
+
+// Fallback result if API fails
+def getSonarFallbackResult() {
+    return [
+        codeSmells: [],
+        vulnerabilities: [],
+        qualityGateSummary: "SonarQube analysis failed or returned no data.",
+        qualityGateStatus: "ERROR",
+        sonarCodeSmellsSummary: "No code smells data available.",
+        sonarVulnerabilitiesSummary: "No vulnerability data available."
+    ]
 }
