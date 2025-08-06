@@ -19,6 +19,7 @@ pipeline {
         OPENAI_API_KEY = credentials('openai-api-key') 
         PDF_REPORT = 'ai_report.pdf'
         SONAR_TOKEN = credentials('sonar-token')
+        DEP_TRACK_API_KEY = credentials('dependency-track-api-key')
     }
 
     tools {
@@ -649,6 +650,20 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
+    def dtJsonPath = getDependencyTrackFindings()
+    def dtSummary = extractTopVulnsFromDt(dtJsonPath)
+    
+    def dtLower = dtSummary.toLowerCase()
+    def dtStatus = (
+        dtLower.contains("no high") &&
+        dtLower.contains("no critical")
+    ) ? "OK" : "Issues Found"
+
+    if (!dtSummary?.trim()) {
+        dtSummary = "No high or critical vulnerabilities found by Dependency-Track."
+        dtStatus = "OK"
+    }
+
     def prompt = """
     You are a security analyst assistant.
 
@@ -670,12 +685,16 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Scan Status Summary:
     - Trivy: ${trivyStatus}
     - Snyk: ${snykStatus}
+    - Dependency-Track: ${dtStatus}
 
     --- Trivy Top Issues ---
     ${trivySummary}
 
     --- Snyk Top Issues ---
     ${snykSummary}
+
+    --- Dependency-Track Top Issues ---
+    ${dtSummary}
 
     """
 
@@ -907,4 +926,49 @@ def getSonarFallbackResult() {
         sonarCodeSmellsSummary: "No code smells data available.",
         sonarVulnerabilitiesSummary: "No vulnerability data available."
     ]
+}
+
+def getDependencyTrackFindings() {
+    
+    def projectName = "${params.ECR_REPO_NAME}"
+    def projectVersion = "${env.COMMIT_SHA}"
+
+    def dtrackHost = 'http://13.201.191.212:8081' 
+    def dtrackToken = "${env.DEP_TRACK_API_KEY}"
+    
+    def encodedProjectName = URLEncoder.encode(projectName, "UTF-8")
+    def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
+    
+    def projectUuid = sh(
+        script: """curl -s -H "X-Api-Key: ${dtrackToken}" "${dtrackHost}/api/v1/project?name=${encodedProjectName}" """,
+        returnStdout: true
+    ).trim()
+
+    def uuid = new groovy.json.JsonSlurperClassic().parseText(projectUuid).find { it.version == projectVersion }?.uuid
+
+    if (!uuid) {
+        error "❌ Dependency-Track project UUID not found for ${projectName}:${projectVersion}"
+    }
+
+    def findingsJson = sh(
+        script: """curl -s -H "X-Api-Key: ${dtrackToken}" "${dtrackHost}/api/v1/finding/project/${uuid}" """,
+        returnStdout: true
+    ).trim()
+
+    writeFile file: 'dependency-track-findings.json', text: findingsJson
+    return 'dependency-track-findings.json'
+}
+
+def extractTopVulnsFromDt(String dtJson) {
+    if (!dtJson) return "<p>No Dependency-Track data available.</p>"
+
+    def json = readJSON text: dtJson
+    def topFindings = json.take(5).collect {
+        def component = it.component?.name ?: "unknown"
+        def vuln = it.vulnerability?.vulnId ?: "unknown"
+        def severity = it.vulnerability?.severity ?: "unknown"
+        def desc = it.vulnerability?.description ?: ""
+        "- <strong>${vuln}</strong> in <strong>${component}</strong> - Severity: ${severity}<br/><p>${desc}</p>"
+    }
+    return "<ul>${topFindings.join('\n')}</ul>"
 }
