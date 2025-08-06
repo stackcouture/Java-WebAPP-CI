@@ -651,8 +651,12 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
+    // def dtJsonPath = getDependencyTrackFindings()
+    // def dtSummary = extractTopVulnsFromDt(dtJsonPath)
+
     def dtJsonPath = getDependencyTrackFindings()
-    def dtSummary = extractTopVulnsFromDt(dtJsonPath)
+    def findings = readJSON file: dtJsonPath
+    def dtSummary = extractTopVulnsFromDt(findings.findings)
     
     def dtLower = dtSummary.toLowerCase()
     def dtStatus = (
@@ -992,26 +996,56 @@ def getDependencyTrackFindings() {
     return 'dependency-track-findings.json'
 }
 
-def extractTopVulnsFromDt(String dtJsonPath) {
-    if (!fileExists(dtJsonPath)) {
-        return "No Dependency-Track data available."
+// def extractTopVulnsFromDt(String dtJsonPath) {
+//     if (!fileExists(dtJsonPath)) {
+//         return "No Dependency-Track data available."
+//     }
+
+//     def json = readJSON file: dtJsonPath
+//     if (!json || json.isEmpty()) {
+//         return "No high or critical vulnerabilities found by Dependency-Track."
+//     }
+
+//     def highSeverityFindings = json.findAll {
+//         it.vulnerability?.severity in ['Critical', 'High']
+//     }.take(5)
+
+//     if (highSeverityFindings.isEmpty()) {
+//         return "No high or critical vulnerabilities found by Dependency-Track."
+//     }
+
+//     def topFindings = generatePlainTextFromFindings(highSeverityFindings)
+//     return topFindings.join("\n\n")
+// }
+
+def extractTopVulnsFromDt(List findings) {
+    if (!findings || findings.isEmpty()) {
+        return "Dependency-Track Summary:\nNo vulnerabilities found by Dependency-Track."
     }
 
-    def json = readJSON file: dtJsonPath
-    if (!json || json.isEmpty()) {
-        return "No high or critical vulnerabilities found by Dependency-Track."
+    def topFindings = findings.findAll { f ->
+        f.severity?.toUpperCase() in ["CRITICAL", "HIGH", "MEDIUM"]
     }
 
-    def highSeverityFindings = json.findAll {
-        it.vulnerability?.severity in ['Critical', 'High']
-    }.take(5)
-
-    if (highSeverityFindings.isEmpty()) {
-        return "No high or critical vulnerabilities found by Dependency-Track."
+    if (topFindings.isEmpty()) {
+        return "Dependency-Track Summary:\nNo high or critical vulnerabilities found by Dependency-Track."
     }
 
-    def topFindings = generatePlainTextFromFindings(highSeverityFindings)
-    return topFindings.join("\n\n")
+    def grouped = topFindings.groupBy { it.severity?.toUpperCase() }
+    def report = new StringBuilder("Dependency-Track Summary:\n")
+
+    ["CRITICAL", "HIGH", "MEDIUM"].each { severity ->
+        def items = grouped[severity]
+        if (items) {
+            report.append("\n<strong>${severity} Issues:</strong>\n<ul>")
+            items.take(5).each { f ->
+                report.append("<li>${f.title} - ${f.cweId ?: 'No CWE'} - ${f.cvssV3Score ?: 'N/A'}</li>")
+            }
+            report.append("</ul>")
+        }
+    }
+
+    return report.toString()
 }
 
 def generatePlainTextFromFindings(List findings) {
