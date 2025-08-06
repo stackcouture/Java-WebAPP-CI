@@ -726,7 +726,7 @@ def getSonarQubeSummary(String sonarHost, String projectKey, String token) {
             returnStdout: true
         ).trim()
         def issues = sh(
-            script: """curl -s -u "${token}:" "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=VULNERABILITY,CODE_SMELL&ps=100"""",
+            script: """curl -s -u "${token}:" "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=VULNERABILITY,CODE_SMELL&ps=100""",
             returnStdout: true
         ).trim()
 
