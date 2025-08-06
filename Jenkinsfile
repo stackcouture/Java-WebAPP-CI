@@ -231,13 +231,28 @@ pipeline {
         stage('Generate GPT Report') {
             steps {
                 script {
-                    runGptSecuritySummary(
-                        "My Java App",
-                        env.COMMIT_SHA,
-                        env.BUILD_NUMBER,
-                        "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
-                    )
+
+                    def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+                    def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+
+                    // Check if necessary environment variables are set
+                    if (!env.COMMIT_SHA || !env.BUILD_NUMBER) {
+                        error("Environment variables COMMIT_SHA or BUILD_NUMBER are not set.")
+                    }
+
+                    // Check if the report files exist
+                    if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
+                        runGptSecuritySummary("My Java App", env.COMMIT_SHA, env.BUILD_NUMBER, trivyHtmlPath, snykJsonPath)
+                    } else {
+                        error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
+                    }
+                    // runGptSecuritySummary(
+                    //     "My Java App",
+                    //     env.COMMIT_SHA,
+                    //     env.BUILD_NUMBER,
+                    //     "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
+                    //     "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+                    // )
                 }   
             } 
         } 
@@ -489,6 +504,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
 
         echo "Response from OpenAI API: ${responseJson}"
 
+        // Check if the response is empty or invalid
         if (responseJson == null || responseJson.isEmpty()) {
             error("Received empty or invalid response from OpenAI API")
         }
@@ -496,12 +512,21 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         writeFile file: gptOutputFile, text: responseJson
 
         try {
-            def response = readJSON text: responseJson
+            // Check if the response is a valid JSON string
+            def response = null
+            try {
+                response = readJSON text: responseJson
+            } catch (Exception e) {
+                error("Failed to parse JSON response: ${e.getMessage()}")
+            }
+
+            // Check if the expected 'choices' and 'message' content are in the response
             def gptContent = response?.choices?.get(0)?.message?.content
             if (!gptContent) {
                 error("GPT response is missing the expected content field")
             }
 
+            // Clean the GPT content
             gptContent = gptContent
                 .replaceAll(/(?m)^```html\s*/, "")
                 .replaceAll(/(?m)^```$/, "")
@@ -563,6 +588,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         }
     }
 }
+
 
 def extractTopVulns(String jsonPath, String toolName) {
     if (!fileExists(jsonPath) || readFile(jsonPath).trim().isEmpty()) {
