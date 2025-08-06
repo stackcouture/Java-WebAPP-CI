@@ -665,6 +665,8 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         dtStatus = "OK"
     }
 
+    echo "Dependency-Track Summary:\n${dtSummary}"
+
     def prompt = """
     You are a security analyst assistant.
 
@@ -673,6 +675,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Include these sections:
     - Project Overview (project name, SHA, build number)
     - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
+    - **Dependency-Track Findings (MUST be shown if present)**
     - Code Smells Summary
     - License Issues (e.g., GPL, AGPL, LGPL)
     - Recommendations (2–4 practical points)
