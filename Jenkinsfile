@@ -669,7 +669,7 @@ def parseStatusBadge(String gptContent) {
 
 def getSonarQubeSummary() {
     def projectKey = "Java-App"
-    def sonarHost = "http://35.154.164.253/:9000"
+    def sonarHost = "http://35.154.164.253:9000"
 
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def qualityGateResponse = sh(script: "curl -s ${apiQualityGateUrl}", returnStdout: true).trim()
