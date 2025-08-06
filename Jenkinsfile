@@ -251,21 +251,11 @@ pipeline {
                             env.COMMIT_SHA, 
                             env.BUILD_NUMBER, 
                             trivyHtmlPath, 
-                            snykJsonPath, 
-                            "Java-App", 
-                            "http://35.154.164.253:9000", 
-                            env.SONAR_TOKEN
+                            snykJsonPath
                         )
                     } else {
                         error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
                     }
-                    // runGptSecuritySummary(
-                    //     "My Java App",
-                    //     env.COMMIT_SHA,
-                    //     env.BUILD_NUMBER,
-                    //     "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-                    //     "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
-                    // )
                 }   
             } 
         } 
@@ -435,7 +425,7 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarProjectKey, String sonarHost, String sonarToken) {
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
@@ -457,8 +447,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
-    // ✅ Pass sonarProjectKey, sonarHost, and sonarToken
-    def sonarSummary = getSonarQubeSummary(sonarProjectKey, sonarHost, sonarToken)
+    def sonarSummary = getSonarQubeSummary()
     def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
     def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
@@ -634,7 +623,10 @@ def parseStatusBadge(String gptContent) {
     return [statusText, badgeColor, badgeClass]
 }
 
-def getSonarQubeSummary(String projectKey, String sonarHost, String sonarToken) {
+def getSonarQubeSummary() {
+    def projectKey = "Java-App" 
+    def sonarHost = "http://13.234.37.254:9000"
+    def sonarToken = env.SONAR_TOKEN
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
