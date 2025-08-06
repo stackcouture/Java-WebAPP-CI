@@ -106,7 +106,10 @@ pipeline {
         stage('Quality Gates') {
             steps {
                 script {
-                        waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                        def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                        if (qualityGate.status != 'OK') {
+                            error "SonarQube Quality Gate failed: ${qualityGate.status}"
+                        }   
                     }	
                 }
         }
@@ -204,19 +207,20 @@ pipeline {
             }
         }
 
-        // stage('Generate GPT Report') {
-        //     steps {
-        //         script {
-        //             runGptSecuritySummary(
-        //                 "My Java App",
-        //                 env.COMMIT_SHA,
-        //                 env.BUILD_NUMBER,
-        //                 "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-        //                 "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
-        //             )
-        //         }   
-        //     } 
-        // } 
+        stage('Generate GPT Report') {
+            steps {
+                script {
+                    runGptSecuritySummary(
+                        "My Java App",
+                        env.COMMIT_SHA,
+                        env.BUILD_NUMBER,
+                        "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
+                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+                        "reports/sonarqube/${env.BUILD_NUMBER}/sonar-report-${env.COMMIT_SHA}.json"
+                    )
+                }   
+            } 
+        } 
     }
 
     post {
@@ -383,10 +387,11 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarJsonPath) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
+    def sonarSummary = extractSonarQubeIssues(sonarJsonPath)
 
     def trivyStatus = (
         trivySummary.toLowerCase().contains("no high") ||
@@ -403,10 +408,13 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     if (!snykSummary?.trim()) {
         snykSummary = "No high or critical vulnerabilities found by Snyk."
         snykStatus = "OK"
-    }   
+    }
+
+    def sonarStatus = sonarSummary ? "Issues Found" : "OK"
 
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
+    echo "SonarQube Summary:\n${sonarSummary}"
 
     def prompt = """
 You are a security analyst assistant.
@@ -428,12 +436,16 @@ Build Number: ${buildNumber}
 Scan Status Summary:
 - Trivy: ${trivyStatus}
 - Snyk: ${snykStatus}
+- SonarQube: ${sonarStatus}
 
 --- Trivy Top Issues ---
 ${trivySummary}
 
 --- Snyk Top Issues ---
 ${snykSummary}
+
+--- SonarQube Issues ---
+${sonarSummary}
 """
     echo "GPT Prompt:\n${prompt}"
 
@@ -474,7 +486,9 @@ ${snykSummary}
     <meta charset="UTF-8">
     <title>Security Report - Build Summary</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; color: #333; }
+        body { font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            margin: 40px; }
         h1, h2 { color: #2c3e50; }
         .section { margin-bottom: 25px; }
         ul { margin-top: 0; padding-left: 20px; }
@@ -558,4 +572,15 @@ def parseStatusBadge(String gptContent) {
     def badgeColor = statusText == "OK" ? "✅" : "❌"
     def badgeClass = statusText == "OK" ? "badge-ok" : "badge-fail"
     return [statusText, badgeColor, badgeClass]
+}
+
+def extractSonarQubeIssues(String sonarJsonPath) {
+    def issues = ""
+    if (fileExists(sonarJsonPath)) {
+        def sonarReport = readJSON file: sonarJsonPath
+        sonarReport.issues.each { issue ->
+            issues += "Severity: ${issue.severity}, Message: ${issue.message}\n"
+        }
+    }
+    return issues
 }
