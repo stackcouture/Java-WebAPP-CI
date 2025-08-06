@@ -110,6 +110,7 @@ pipeline {
                     withSonarQubeEnv('sonar-server') {
                         sh """
                             ${scannerHome}/bin/sonar-scanner \
+                                -X \
                                 -Dsonar.projectKey=Java-App \
                                 -Dsonar.java.binaries=target/classes
                         """
