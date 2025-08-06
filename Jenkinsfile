@@ -444,11 +444,11 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
-    //def sonarSummary = getSonarQubeSummary()
+    def sonarSummary = getSonarQubeSummary()
 
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
-    //echo "SonarQube Summary:\n${sonarSummary}"
+    echo "SonarQube Summary:\n${sonarSummary}"
 
     def prompt = """
     You are a security analyst assistant.
@@ -470,6 +470,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Scan Status Summary:
     - Trivy: ${trivyStatus}
     - Snyk: ${snykStatus}
+    - SonarQube: ${sonarSummary}
 
     --- Trivy Top Issues ---
     ${trivySummary}
@@ -477,6 +478,9 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     --- Snyk Top Issues ---
     ${snykSummary}
 
+    --- SonarQube Issues ---
+    ${sonarSummary}
+    
     """
     echo "GPT Prompt:\n${prompt}"
 
@@ -653,34 +657,26 @@ def getSonarQubeSummary() {
     // Categorize issues
     issuesJson?.issues?.each { issue ->
         if (issue.type == "CODE_SMELL") {
-            codeSmells.add("ID: ${issue.key} | ${issue.message} [${issue.severity}] in ${issue.componentKey}")
+            codeSmells.add(["id": issue.key, "message": issue.message, "severity": issue.severity, "component": issue.componentKey])
         } else if (issue.type == "VULNERABILITY") {
-            vulnerabilities.add("ID: ${issue.key} | ${issue.message} [${issue.severity}] in ${issue.componentKey}")
+            vulnerabilities.add(["id": issue.key, "message": issue.message, "severity": issue.severity, "component": issue.componentKey])
         }
     }
 
-    def codeSmellSummary
-    if (codeSmells.isEmpty()) {
-        codeSmellSummary = "No code smells found"
-    } else {
-        codeSmellSummary = codeSmells.join("\n")
-    }
+    def codeSmellSummary = codeSmells.isEmpty() ? "No code smells found" : codeSmells
+    def vulnerabilitySummary = vulnerabilities.isEmpty() ? "No vulnerabilities found" : vulnerabilities
 
-    def vulnerabilitySummary
-    if (vulnerabilities.isEmpty()) {
-        vulnerabilitySummary = "No vulnerabilities found"
-    } else {
-        vulnerabilitySummary = vulnerabilities.join("\n")
-    }
-    // Construct final summary
-    def detailedSummary = """
-SonarQube Quality Gate: ${qualityGateSummary}
+    // Construct the final JSON object
+    def summaryJson = [
+        "qualityGate": [
+            "status": qualityGateStatus,
+            "summary": qualityGateSummary
+        ],
+        "issues": [
+            "codeSmells": codeSmellSummary,
+            "vulnerabilities": vulnerabilitySummary
+        ]
+    ]
 
---- Code Smells ---
-${codeSmellSummary}
-
---- Vulnerabilities ---
-${vulnerabilitySummary}
-"""
-    return detailedSummary
+    return JsonOutput.toJson(summaryJson)
 }
