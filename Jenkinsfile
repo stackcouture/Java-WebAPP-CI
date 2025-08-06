@@ -480,7 +480,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
 
     --- SonarQube Issues ---
     ${sonarSummary}
-    
+
     """
     echo "GPT Prompt:\n${prompt}"
 
@@ -641,15 +641,31 @@ def getSonarQubeSummary() {
     // Get project status (quality gate)
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def qualityGateResponse = sh(script: "curl -s ${apiQualityGateUrl}", returnStdout: true).trim()
-    def qualityGateJson = readJSON text: qualityGateResponse
+    echo "Quality Gate Response: ${qualityGateResponse}"  // Debugging
+    
+    def qualityGateJson
+    try {
+        qualityGateJson = readJSON text: qualityGateResponse
+    } catch (Exception e) {
+        echo "Error parsing quality gate JSON: ${e.message}"
+        return
+    }
+    
     def qualityGateStatus = qualityGateJson?.projectStatus?.status
-
     def qualityGateSummary = qualityGateStatus == "OK" ? "SonarQube Quality Gate Passed" : "SonarQube Quality Gate Failed: ${qualityGateStatus}"
 
     // Get detailed issues (code smells, vulnerabilities, etc.)
     def apiIssuesUrl = "${sonarHost}/api/issues/search?projectKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&severities=BLOCKER,CRITICAL,MAJOR&ps=1000"
     def issuesResponse = sh(script: "curl -s ${apiIssuesUrl}", returnStdout: true).trim()
-    def issuesJson = readJSON text: issuesResponse
+    echo "Issues Response: ${issuesResponse}"  // Debugging
+    
+    def issuesJson
+    try {
+        issuesJson = readJSON text: issuesResponse
+    } catch (Exception e) {
+        echo "Error parsing issues JSON: ${e.message}"
+        return
+    }
 
     def codeSmells = []
     def vulnerabilities = []
