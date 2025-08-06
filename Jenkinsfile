@@ -53,6 +53,21 @@ pipeline {
             }
         }
 
+        stage('Publish SBOM') {
+            steps {
+                script {
+                    def sbomFile = 'target/bom.xml'
+                    if (fileExists(sbomFile)) {
+                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+                        echo "SBOM archived: ${sbomFile}"
+                    }
+                    else {
+                        error "SBOM not found: ${sbomFile}"
+                    }
+                }
+            }
+        }
+
         // stage('Handle  SBOM') {
         //     steps {
         //         script {
