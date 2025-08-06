@@ -407,7 +407,7 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarJsonPath) {
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
