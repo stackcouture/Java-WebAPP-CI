@@ -938,48 +938,54 @@ def getDependencyTrackFindings() {
     def encodedProjectName = URLEncoder.encode(projectName, "UTF-8")
     def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
 
-    def projectUuidJson = ''
     def projectUuid = ''
     def findingsJson = ''
 
-    withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
-        projectUuidJson = sh(
-            script: """
-                curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
-                "${dtrackHost}/api/v1/project?name=${encodedProjectName}"
-            """,
-            returnStdout: true
-        ).trim()
+    script {
+        def projectUuidJson = ''
+
+        withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+            projectUuidJson = sh(
+                script: """
+                    curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+                    "${dtrackHost}/api/v1/project?name=${encodedProjectName}"
+                """,
+                returnStdout: true
+            ).trim()
+        }
+
+        if (!projectUuidJson?.startsWith("[")) {
+            error "❌ Invalid response from Dependency-Track project lookup: ${projectUuidJson}"
+        }
+
+        def projectList = new groovy.json.JsonSlurper().parseText(projectUuidJson)
+        def matchedProject = projectList.find { it.version == projectVersion }
+
+        if (!matchedProject) {
+            error "❌ Dependency-Track project not found for ${projectName}:${projectVersion}"
+        }
+
+        projectUuid = matchedProject.uuid
     }
 
-    if (!projectUuidJson?.startsWith("[")) {
-        error "❌ Invalid response from Dependency-Track project lookup: ${projectUuidJson}"
+    script {
+        withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+            findingsJson = sh(
+                script: """
+                    curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+                    "${dtrackHost}/api/v1/finding/project/${projectUuid}"
+                """,
+                returnStdout: true
+            ).trim()
+        }
+
+        if (!findingsJson?.startsWith("[")) {
+            error "❌ Invalid JSON from Dependency-Track findings: ${findingsJson.take(200)}"
+        }
+
+        writeFile file: 'dependency-track-findings.json', text: findingsJson
     }
 
-    def projectList = new groovy.json.JsonSlurper().parseText(projectUuidJson)
-    def matchedProject = projectList.find { it.version == projectVersion }
-
-    if (!matchedProject) {
-        error "❌ Dependency-Track project not found for ${projectName}:${projectVersion}"
-    }
-
-    projectUuid = matchedProject.uuid
-
-    withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
-        findingsJson = sh(
-            script: """
-                curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
-                "${dtrackHost}/api/v1/finding/project/${projectUuid}"
-            """,
-            returnStdout: true
-        ).trim()
-    }
-
-    if (!findingsJson?.startsWith("[")) {
-        error "❌ Invalid JSON from Dependency-Track findings: ${findingsJson.take(200)}"
-    }
-
-    writeFile file: 'dependency-track-findings.json', text: findingsJson
     return 'dependency-track-findings.json'
 }
 
