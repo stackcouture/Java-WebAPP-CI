@@ -215,7 +215,7 @@ pipeline {
                         env.COMMIT_SHA,
                         env.BUILD_NUMBER,
                         "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json",
                         "reports/sonarqube/${env.BUILD_NUMBER}/sonar-report-${env.COMMIT_SHA}.json"
                     )
                 }   
