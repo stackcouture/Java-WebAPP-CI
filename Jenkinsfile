@@ -458,6 +458,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Include these sections:
     - Project Overview (project name, SHA, build number)
     - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
+    - Code Smells Summary
     - License Issues (e.g., GPL, AGPL, LGPL)
     - Recommendations (2–4 practical points)
     - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
@@ -570,6 +571,19 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
                 </div>
 
                 <div class="section">
+                    <h2>SonarQube Issues</h2>
+                    <h3>Code Smells</h3>
+                    <ul>
+                        ${formatSonarQubeIssues(sonarSummary.issues.codeSmells)}
+                    </ul>
+
+                    <h3>Vulnerabilities</h3>
+                    <ul>
+                        ${formatSonarQubeIssues(sonarSummary.issues.vulnerabilities)}
+                    </ul>
+                </div>
+
+                <div class="section">
                     <h2>AI Recommendations</h2>
                     <div class="highlight">
                         ${gptContent}
@@ -590,6 +604,11 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     }
 }
 
+def formatSonarQubeIssues(issues) {
+    return issues.collect { issue ->
+        "<li><strong>${issue.severity}:</strong> ${issue.message} | <strong>Component:</strong> ${issue.component}</li>"
+    }.join("\n")
+}
 
 def extractTopVulns(String jsonPath, String toolName) {
     if (!fileExists(jsonPath) || readFile(jsonPath).trim().isEmpty()) {
@@ -641,8 +660,8 @@ def getSonarQubeSummary() {
     // Get project status (quality gate)
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def qualityGateResponse = sh(script: "curl -s ${apiQualityGateUrl}", returnStdout: true).trim()
-    echo "Quality Gate Response: ${qualityGateResponse}"  // Debugging
-    
+    echo "Quality Gate Response: ${qualityGateResponse}"
+
     def qualityGateJson
     try {
         qualityGateJson = readJSON text: qualityGateResponse
@@ -650,15 +669,14 @@ def getSonarQubeSummary() {
         echo "Error parsing quality gate JSON: ${e.message}"
         return
     }
-    
+
     def qualityGateStatus = qualityGateJson?.projectStatus?.status
     def qualityGateSummary = qualityGateStatus == "OK" ? "SonarQube Quality Gate Passed" : "SonarQube Quality Gate Failed: ${qualityGateStatus}"
 
     // Get detailed issues (code smells, vulnerabilities, etc.)
     def apiIssuesUrl = "${sonarHost}/api/issues/search?projectKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&severities=BLOCKER,CRITICAL,MAJOR&ps=1000"
     def issuesResponse = sh(script: "curl -s ${apiIssuesUrl}", returnStdout: true).trim()
-    echo "Issues Response: ${issuesResponse}"  // Debugging
-    
+
     def issuesJson
     try {
         issuesJson = readJSON text: issuesResponse
@@ -682,7 +700,7 @@ def getSonarQubeSummary() {
     def codeSmellSummary = codeSmells.isEmpty() ? "No code smells found" : codeSmells
     def vulnerabilitySummary = vulnerabilities.isEmpty() ? "No vulnerabilities found" : vulnerabilities
 
-    // Construct the final JSON object
+    // Construct the final JSON object for SonarQube summary
     def summaryJson = [
         "qualityGate": [
             "status": qualityGateStatus,
