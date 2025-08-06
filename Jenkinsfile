@@ -930,46 +930,87 @@ def getSonarFallbackResult() {
 }
 
 def getDependencyTrackFindings() {
-    
     def projectName = "${params.ECR_REPO_NAME}"
     def projectVersion = "${env.COMMIT_SHA}"
-
-    def dtrackHost = 'http://13.201.191.212:8081' 
+    def dtrackHost = 'http://13.201.191.212:8081'
     def dtrackToken = "${env.DEP_TRACK_API_KEY}"
-    
+
     def encodedProjectName = URLEncoder.encode(projectName, "UTF-8")
     def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
-    
-    def projectUuid = sh(
-        script: """curl -s -H "X-Api-Key: ${dtrackToken}" "${dtrackHost}/api/v1/project?name=${encodedProjectName}" """,
-        returnStdout: true
-    ).trim()
 
-    def uuid = new groovy.json.JsonSlurper().parseText(projectUuid).find { it.version == projectVersion }?.uuid
+    def projectUuidJson = ''
+    def projectUuid = ''
+    def findingsJson = ''
 
-    if (!uuid) {
-        error "❌ Dependency-Track project UUID not found for ${projectName}:${projectVersion}"
+    withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+        projectUuidJson = sh(
+            script: """
+                curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+                "${dtrackHost}/api/v1/project?name=${encodedProjectName}"
+            """,
+            returnStdout: true
+        ).trim()
     }
 
-    def findingsJson = sh(
-        script: """curl -s -H "X-Api-Key: ${dtrackToken}" "${dtrackHost}/api/v1/finding/project/${uuid}" """,
-        returnStdout: true
-    ).trim()
+    if (!projectUuidJson?.startsWith("[")) {
+        error "❌ Invalid response from Dependency-Track project lookup: ${projectUuidJson}"
+    }
+
+    def projectList = new groovy.json.JsonSlurper().parseText(projectUuidJson)
+    def matchedProject = projectList.find { it.version == projectVersion }
+
+    if (!matchedProject) {
+        error "❌ Dependency-Track project not found for ${projectName}:${projectVersion}"
+    }
+
+    projectUuid = matchedProject.uuid
+
+    withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+        findingsJson = sh(
+            script: """
+                curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+                "${dtrackHost}/api/v1/finding/project/${projectUuid}"
+            """,
+            returnStdout: true
+        ).trim()
+    }
+
+    if (!findingsJson?.startsWith("[")) {
+        error "❌ Invalid JSON from Dependency-Track findings: ${findingsJson.take(200)}"
+    }
 
     writeFile file: 'dependency-track-findings.json', text: findingsJson
     return 'dependency-track-findings.json'
 }
 
-def extractTopVulnsFromDt(String dtJson) {
-    if (!dtJson) return "<p>No Dependency-Track data available.</p>"
+def extractTopVulnsFromDt(String dtJsonPath) {
+    if (!fileExists(dtJsonPath)) {
+        return "No Dependency-Track data available."
+    }
 
-    def json = readJSON text: dtJson
-    def topFindings = json.take(5).collect {
+    def json = readJSON file: dtJsonPath
+    if (!json || json.isEmpty()) {
+        return "No high or critical vulnerabilities found by Dependency-Track."
+    }
+
+    def highSeverityFindings = json.findAll {
+        it.vulnerability?.severity in ['Critical', 'High']
+    }.take(5)
+
+    if (highSeverityFindings.isEmpty()) {
+        return "No high or critical vulnerabilities found by Dependency-Track."
+    }
+
+    def topFindings = generatePlainTextFromFindings(highSeverityFindings)
+    return topFindings.join("\n\n")
+}
+
+def generatePlainTextFromFindings(List findings) {
+    return findings.collect {
         def component = it.component?.name ?: "unknown"
         def vuln = it.vulnerability?.vulnId ?: "unknown"
         def severity = it.vulnerability?.severity ?: "unknown"
         def desc = it.vulnerability?.description ?: ""
-        "- <strong>${vuln}</strong> in <strong>${component}</strong> - Severity: ${severity}<br/><p>${desc}</p>"
+        return "- ${vuln} in ${component} (Severity: ${severity})\n  ${desc}"
     }
-    return "<ul>${topFindings.join('\n')}</ul>"
 }
