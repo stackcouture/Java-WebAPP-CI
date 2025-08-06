@@ -54,16 +54,50 @@ pipeline {
             }
         }
 
-        stage('Publish SBOM') {
+        stage('Handle  SBOM') {
             steps {
                 script {
-                    def sbomFile = 'target/bom.xml'
-                    if (fileExists(sbomFile)) {
-                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
-                        echo "SBOM archived: ${sbomFile}"
-                    }
-                    else {
-                        error "SBOM not found: ${sbomFile}"
+                    handleSbomUpload(
+                        sbomFile: 'target/bom.xml',
+                        projectName: "${params.ECR_REPO_NAME}",
+                        projectVersion: "${env.COMMIT_SHA}",
+                        dependencyTrackUrl: 'http://13.233.157.56:8081/api/v1/bom',
+                        apiKeyCredentialId: 'dependency-track-api-key'
+                    )
+                }
+            }
+        }
+
+        stage('Upload SBOM to Dependency-Track') {
+            steps {
+                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+                    script {
+                        def sbomFile = 'target/bom.xml'
+                        if (!fileExists(sbomFile)) {
+                            error "❌ SBOM file not found: ${sbomFile}"
+                        }
+
+                        def projectName = "${params.ECR_REPO_NAME}"
+                        def projectVersion = "${env.COMMIT_SHA}"
+                        def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
+
+                        echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
+
+                        withEnv([
+                            "DEPTRACK_URL=${dependencyTrackUrl}",
+                            "PROJECT_NAME=${projectName}",
+                            "PROJECT_VERSION=${projectVersion}"
+                        ]) {
+                            sh '''#!/bin/bash
+                                curl -X POST "$DEPTRACK_URL" \
+                                    -H "X-Api-Key: $DT_API_KEY" \
+                                    -H "Content-Type: multipart/form-data" \
+                                    -F "autoCreate=true" \
+                                    -F "projectName=$PROJECT_NAME" \
+                                    -F "projectVersion=$PROJECT_VERSION" \
+                                    -F "bom=@target/bom.xml"
+                            '''
+                        }
                     }
                 }
             }
@@ -92,17 +126,6 @@ pipeline {
                 }
             }
         }
-
-        // stage('Sonar Analysis') {
-        //     steps {
-        //         withSonarQubeEnv('sonar-server') {
-	    //            sh ''' 
-        //         		mvn clean verify sonar:sonar \
-        //         		-Dsonar.projectKey=Java-App
-	    //                '''
-        //             }
-        //     }
-        // }
 
         stage('SonarQube Analysis') {
             steps {
@@ -245,7 +268,6 @@ pipeline {
 
                     // Check if the report files exist
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-                       // runGptSecuritySummary("My Java App", env.COMMIT_SHA, env.BUILD_NUMBER, trivyHtmlPath, snykJsonPath)
                         runGptSecuritySummary(
                             "my-app", 
                             env.COMMIT_SHA, 
@@ -259,13 +281,6 @@ pipeline {
                     } else {
                         error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
                     }
-                    // runGptSecuritySummary(
-                    //     "My Java App",
-                    //     env.COMMIT_SHA,
-                    //     env.BUILD_NUMBER,
-                    //     "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-                    //     "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
-                    // )
                 }   
             } 
         } 
@@ -517,8 +532,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
             -H "Content-Type: application/json" \\
             -d @${gptPromptFile}
         """, returnStdout: true).trim()
-
-        echo "Response from OpenAI API: ${responseJson}"
 
         if (!responseJson) {
             error("Received empty or invalid response from OpenAI API")
