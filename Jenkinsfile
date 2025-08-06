@@ -436,36 +436,36 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     echo "SonarQube Summary:\n${sonarSummary}"
 
     def prompt = """
-You are a security analyst assistant.
+    You are a security analyst assistant.
 
-Generate a clean HTML security report based on the following scan data. Use only <h2>, <ul>, <p>, and <strong> tags. Avoid Markdown or code blocks.
+    Generate a clean HTML security report based on the following scan data. Use only <h2>, <ul>, <p>, and <strong> tags. Avoid Markdown or code blocks.
 
-Include these sections:
-- Project Overview (project name, SHA, build number)
-- Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
-- License Issues (e.g., GPL, AGPL, LGPL)
-- Recommendations (2–4 practical points)
-- One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
+    Include these sections:
+    - Project Overview (project name, SHA, build number)
+    - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
+    - License Issues (e.g., GPL, AGPL, LGPL)
+    - Recommendations (2–4 practical points)
+    - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
 
-Context:
-Project: ${projectName}
-Commit SHA: ${gitSha}
-Build Number: ${buildNumber}
+    Context:
+    Project: ${projectName}
+    Commit SHA: ${gitSha}
+    Build Number: ${buildNumber}
 
-Scan Status Summary:
-- Trivy: ${trivyStatus}
-- Snyk: ${snykStatus}
-- SonarQube: ${sonarSummary}
+    Scan Status Summary:
+    - Trivy: ${trivyStatus}
+    - Snyk: ${snykStatus}
+    - SonarQube: ${sonarSummary}
 
---- Trivy Top Issues ---
-${trivySummary}
+    --- Trivy Top Issues ---
+    ${trivySummary}
 
---- Snyk Top Issues ---
-${snykSummary}
+    --- Snyk Top Issues ---
+    ${snykSummary}
 
---- SonarQube Issues ---
-${sonarSummary}
-"""
+    --- SonarQube Issues ---
+    ${sonarSummary}
+    """
     echo "GPT Prompt:\n${prompt}"
 
     def gptPromptFile = "openai_prompt.json"
@@ -487,66 +487,80 @@ ${sonarSummary}
             -d @${gptPromptFile}
         """, returnStdout: true).trim()
 
+        echo "Response from OpenAI API: ${responseJson}"
+
+        if (responseJson == null || responseJson.isEmpty()) {
+            error("Received empty or invalid response from OpenAI API")
+        }
+
         writeFile file: gptOutputFile, text: responseJson
-        def response = readJSON text: responseJson
-        def gptContent = response.choices[0].message.content ?: error("Empty GPT content")
 
-        gptContent = gptContent
-            .replaceAll(/(?m)^```html\s*/, "")
-            .replaceAll(/(?m)^```$/, "")
-            .trim()
+        try {
+            def response = readJSON text: responseJson
+            def gptContent = response?.choices?.get(0)?.message?.content
+            if (!gptContent) {
+                error("GPT response is missing the expected content field")
+            }
 
-        def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
+            gptContent = gptContent
+                .replaceAll(/(?m)^```html\s*/, "")
+                .replaceAll(/(?m)^```$/, "")
+                .trim()
 
-        def htmlContent = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Security Report - Build Summary</title>
-    <style>
-        body { font-family: Arial, sans-serif;
-            background-color: #f9f9f9;
-            margin: 40px; }
-        h1, h2 { color: #2c3e50; }
-        .section { margin-bottom: 25px; }
-        ul { margin-top: 0; padding-left: 20px; }
-        .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
-        .badge-ok { color: green; font-weight: bold; }
-        .badge-fail { color: red; font-weight: bold; }
-        a { color: #2c3e50; text-decoration: underline; }
-        footer { margin-top: 40px; font-size: 0.9em; color: #888; }
-    </style>
-</head>
-<body>
-    <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-    <h1>Security Scan Summary</h1>
+            def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
 
-    <div class="section">
-        <h2>Trivy Scan</h2>
-        <p>Full Trivy scan results are archived. <a href="${env.BUILD_URL}artifact/${trivyHtmlPath}">View full report</a></p>
-    </div>
+            def htmlContent = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Security Report - Build Summary</title>
+                <style>
+                    body { font-family: Arial, sans-serif;
+                        background-color: #f9f9f9;
+                        margin: 40px; }
+                    h1, h2 { color: #2c3e50; }
+                    .section { margin-bottom: 25px; }
+                    ul { margin-top: 0; padding-left: 20px; }
+                    .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+                    .badge-ok { color: green; font-weight: bold; }
+                    .badge-fail { color: red; font-weight: bold; }
+                    a { color: #2c3e50; text-decoration: underline; }
+                    footer { margin-top: 40px; font-size: 0.9em; color: #888; }
+                </style>
+            </head>
+            <body>
+                <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+                <h1>Security Scan Summary</h1>
 
-    <div class="section">
-        <h2>Snyk Summary</h2>
-        <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
-    </div>
+                <div class="section">
+                    <h2>Trivy Scan</h2>
+                    <p>Full Trivy scan results are archived. <a href="${env.BUILD_URL}artifact/${trivyHtmlPath}">View full report</a></p>
+                </div>
 
-    <div class="section">
-        <h2>AI Recommendations</h2>
-        <div class="highlight">
-            ${gptContent}
-        </div>
-    </div>
+                <div class="section">
+                    <h2>Snyk Summary</h2>
+                    <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
+                </div>
 
-    <footer>
-        <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
-    </footer>
-</body>
-</html>
-"""
-        writeFile file: gptReportFile, text: htmlContent
-        echo "AI-powered GPT report generated: ${gptReportFile}"
+                <div class="section">
+                    <h2>AI Recommendations</h2>
+                    <div class="highlight">
+                        ${gptContent}
+                    </div>
+                </div>
+
+                <footer>
+                    <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+                </footer>
+            </body>
+            </html>
+            """
+            writeFile file: gptReportFile, text: htmlContent
+            echo "AI-powered GPT report generated: ${gptReportFile}"
+        } catch (Exception e) {
+            error("Failed to parse or process the GPT response: ${e.getMessage()}")
+        }
     }
 }
 
