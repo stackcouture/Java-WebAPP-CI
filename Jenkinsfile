@@ -27,7 +27,6 @@ pipeline {
     }
 
     stages {
-
         stage('Clean Workspace') {
             steps {
                 cleanWs()
@@ -81,7 +80,7 @@ pipeline {
                         def projectVersion = "${env.COMMIT_SHA}"
                         def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
 
-                        echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
+                        echo "Uploading SBOM for ${projectName}:${projectVersion}"
 
                         withEnv([
                             "DEPTRACK_URL=${dependencyTrackUrl}",
