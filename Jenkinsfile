@@ -462,10 +462,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
     def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
-    echo "Trivy Summary:\n${trivySummary}"
-    echo "Snyk Summary:\n${snykSummary}"
-    echo "SonarQube Summary:\n${sonarSummary.qualityGateSummary}"
-
     def prompt = """
     You are a security analyst assistant.
 
@@ -565,33 +561,9 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
             </head>
             <body>
                 <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-                <h1>Security Scan Summary</h1>
 
                 <div class="section">
-                    <h2>Trivy Scan</h2>
-                    <p>Full Trivy scan results are archived. <a href="${env.BUILD_URL}artifact/${trivyHtmlPath}">View full report</a></p>
-                </div>
-
-                <div class="section">
-                    <h2>Snyk Summary</h2>
-                    <p><strong>Status:</strong> <span class="${badgeClass}">${statusText} ${badgeColor}</span></p>
-                </div>
-
-                <div class="section">
-                    <h2>SonarQube Issues</h2>
-                    <h3>Code Smells</h3>
-                    <ul>
-                        ${formatSonarQubeIssues(sonarSummary.codeSmells)}
-                    </ul>
-
-                    <h3>Vulnerabilities</h3>
-                    <ul>
-                         ${formatSonarQubeIssues(sonarSummary.vulnerabilities)}
-                    </ul>
-                </div>
-
-                <div class="section">
-                    <h2>AI Recommendations</h2>
+                    <h2>AI Recommendations - Security Scan Summary</h2>
                     <div class="highlight">
                         ${gptContent}
                     </div>
