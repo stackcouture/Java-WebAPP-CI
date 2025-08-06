@@ -92,14 +92,26 @@ pipeline {
             }
         }
 
-        stage('Sonar Analysis') {
+        // stage('Sonar Analysis') {
+        //     steps {
+        //         withSonarQubeEnv('sonar-server') {
+	    //            sh ''' 
+        //         		mvn clean verify sonar:sonar \
+        //         		-Dsonar.projectKey=Java-App
+	    //                '''
+        //             }
+        //     }
+        // }
+
+        stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonar-server') {
-	               sh ''' 
-                		mvn clean verify sonar:sonar \
-                		-Dsonar.projectKey=Java-App
-	                   '''
+                script {
+                    // Make sure SonarQube server is configured in Jenkins
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonar-server') {
+                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=Java-App"
                     }
+                }
             }
         }
 
@@ -110,6 +122,9 @@ pipeline {
                         if (qualityGate.status != 'OK') {
                             error "SonarQube Quality Gate failed: ${qualityGate.status}"
                         }   
+                        else {
+                            echo "SonarQube Quality Gate passed: ${qualityGate.status}"
+                        }
                     }	
                 }
         }
@@ -215,8 +230,7 @@ pipeline {
                         env.COMMIT_SHA,
                         env.BUILD_NUMBER,
                         "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json",
-                        "reports/sonarqube/${env.BUILD_NUMBER}/sonar-report-${env.COMMIT_SHA}.json"
+                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
                     )
                 }   
             } 
@@ -391,7 +405,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
-    def sonarSummary = extractSonarQubeIssues(sonarJsonPath)
 
     def trivyStatus = (
         trivySummary.toLowerCase().contains("no high") ||
@@ -410,7 +423,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
-    def sonarStatus = sonarSummary ? "Issues Found" : "OK"
+    def sonarSummary = getSonarQubeSummary()
 
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
@@ -436,7 +449,7 @@ Build Number: ${buildNumber}
 Scan Status Summary:
 - Trivy: ${trivyStatus}
 - Snyk: ${snykStatus}
-- SonarQube: ${sonarStatus}
+- SonarQube: ${sonarSummary}
 
 --- Trivy Top Issues ---
 ${trivySummary}
@@ -574,13 +587,57 @@ def parseStatusBadge(String gptContent) {
     return [statusText, badgeColor, badgeClass]
 }
 
-def extractSonarQubeIssues(String sonarJsonPath) {
-    def issues = ""
-    if (fileExists(sonarJsonPath)) {
-        def sonarReport = readJSON file: sonarJsonPath
-        sonarReport.issues.each { issue ->
-            issues += "Severity: ${issue.severity}, Message: ${issue.message}\n"
+def getSonarQubeSummary() {
+    def projectKey = "Java-App"
+    def sonarHost = "http://13.127.121.234:9000"
+
+    // Get project status (quality gate)
+    def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
+    def qualityGateResponse = sh(script: "curl -s ${apiQualityGateUrl}", returnStdout: true).trim()
+    def qualityGateJson = readJSON text: qualityGateResponse
+    def qualityGateStatus = qualityGateJson?.projectStatus?.status
+
+    def qualityGateSummary = qualityGateStatus == "OK" ? "SonarQube Quality Gate Passed" : "SonarQube Quality Gate Failed: ${qualityGateStatus}"
+
+    // Get detailed issues (code smells, vulnerabilities, etc.)
+    def apiIssuesUrl = "${sonarHost}/api/issues/search?projectKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&severities=BLOCKER,CRITICAL,MAJOR&ps=1000"
+    def issuesResponse = sh(script: "curl -s ${apiIssuesUrl}", returnStdout: true).trim()
+    def issuesJson = readJSON text: issuesResponse
+
+    def codeSmells = []
+    def vulnerabilities = []
+
+    // Categorize issues
+    issuesJson?.issues?.each { issue ->
+        if (issue.type == "CODE_SMELL") {
+            codeSmells.add("ID: ${issue.key} | ${issue.message} [${issue.severity}] in ${issue.componentKey}")
+        } else if (issue.type == "VULNERABILITY") {
+            vulnerabilities.add("ID: ${issue.key} | ${issue.message} [${issue.severity}] in ${issue.componentKey}")
         }
     }
-    return issues
+
+    def codeSmellSummary
+    if (codeSmells.isEmpty()) {
+        codeSmellSummary = "No code smells found"
+    } else {
+        codeSmellSummary = codeSmells.join("\n")
+    }
+
+    def vulnerabilitySummary
+    if (vulnerabilities.isEmpty()) {
+        vulnerabilitySummary = "No vulnerabilities found"
+    } else {
+        vulnerabilitySummary = vulnerabilities.join("\n")
+    }
+    // Construct final summary
+    def detailedSummary = """
+SonarQube Quality Gate: ${qualityGateSummary}
+
+--- Code Smells ---
+${codeSmellSummary}
+
+--- Vulnerabilities ---
+${vulnerabilitySummary}
+"""
+    return detailedSummary
 }
