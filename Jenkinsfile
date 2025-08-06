@@ -113,7 +113,7 @@ pipeline {
                                 -X \
                                 -Dsonar.projectKey=Java-App \
                                 -Dsonar.java.binaries=target/classes \
-                                -Dsonar.sources=src/main/java \
+                                -Dsonar.sources=src/main/java,src/test/java \
                                 -Dsonar.exclusions=**/*.js
                         """
                     }
@@ -124,12 +124,14 @@ pipeline {
         stage('Quality Gates') {
             steps {
                 script {
-                        def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
-                        if (qualityGate.status != 'OK') {
-                            error "SonarQube Quality Gate failed: ${qualityGate.status}"
-                        }   
-                        else {
-                            echo "SonarQube Quality Gate passed: ${qualityGate.status}"
+                    timeout(time: 5, unit: 'MINUTES') {
+                            def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                            if (qualityGate.status != 'OK') {
+                                error "SonarQube Quality Gate failed: ${qualityGate.status}"
+                            }   
+                            else {
+                                echo "SonarQube Quality Gate passed: ${qualityGate.status}"
+                            }
                         }
                     }	
                 }
