@@ -92,38 +92,57 @@ pipeline {
             }
         }
 
+        stage('Sonar Analysis') {
+            steps {
+                withSonarQubeEnv('sonar-server') {
+	               sh ''' 
+                		mvn clean verify sonar:sonar \
+                		-Dsonar.projectKey=Java-App
+	                   '''
+                    }
+            }
+        }
+
+        stage('Quality Gates') {
+            steps {
+                script {
+                        waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                    }	
+                }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} ."
             }
         }
 
-        stage('Security Scans Before Push') {
-            parallel {
-                stage('Trivy Before Push') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        script {
-                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runTrivyScanUnified("before-push", localTag, "image")
-                        }
-                    }
-                }
-                stage('Snyk Before Push') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        script {
-                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runSnykScan("before-push", localTag)
-                        }
-                    }
-                }
-            }
-        }
+        // stage('Security Scans Before Push') {
+        //     parallel {
+        //         stage('Trivy Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runTrivyScanUnified("before-push", localTag, "image")
+        //                 }
+        //             }
+        //         }
+        //         stage('Snyk Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runSnykScan("before-push", localTag)
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Docker Push') {
             steps {
@@ -185,19 +204,19 @@ pipeline {
             }
         }
 
-        stage('Generate GPT Report') {
-            steps {
-                script {
-                    runGptSecuritySummary(
-                        "My Java App",
-                        env.COMMIT_SHA,
-                        env.BUILD_NUMBER,
-                        "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
-                        "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
-                    )
-                }   
-            } 
-        } 
+        // stage('Generate GPT Report') {
+        //     steps {
+        //         script {
+        //             runGptSecuritySummary(
+        //                 "My Java App",
+        //                 env.COMMIT_SHA,
+        //                 env.BUILD_NUMBER,
+        //                 "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html",
+        //                 "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+        //             )
+        //         }   
+        //     } 
+        // } 
     }
 
     post {
@@ -494,7 +513,7 @@ ${snykSummary}
 </html>
 """
         writeFile file: gptReportFile, text: htmlContent
-        echo "✅ AI-powered GPT report generated: ${gptReportFile}"
+        echo "AI-powered GPT report generated: ${gptReportFile}"
     }
 }
 
