@@ -106,10 +106,13 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 script {
-                    // Make sure SonarQube server is configured in Jenkins
                     def scannerHome = tool 'sonar-scanner'
                     withSonarQubeEnv('sonar-server') {
-                        sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=Java-App"
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=Java-App \
+                                -Dsonar.java.binaries=target/classes
+                        """
                     }
                 }
             }
