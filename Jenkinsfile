@@ -447,6 +447,15 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     def sonarSummary = getSonarQubeSummary()
     def sonarIssues = sonarSummary?.codeSmells + sonarSummary?.vulnerabilities
 
+    // Summarize SonarQube Code Smells and Vulnerabilities
+    def sonarCodeSmellsSummary = sonarSummary.codeSmells.collect { 
+        return "Severity: ${it.severity}, Message: ${it.message}" 
+    }.join("\n")
+
+    def sonarVulnerabilitiesSummary = sonarSummary.vulnerabilities.collect { 
+        return "Severity: ${it.severity}, Message: ${it.message}" 
+    }.join("\n")
+
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
     echo "SonarQube Summary:\n${sonarSummary}"
@@ -481,13 +490,11 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     ${snykSummary}
 
     --- SonarQube Issues ---
-    
     Code Smells:
-    ${sonarSummary.codeSmells.collect { it.message }.join("\n")}
+    ${sonarCodeSmellsSummary}
 
     Vulnerabilities:
-    ${sonarSummary.vulnerabilities.collect { it.message }.join("\n")}
-
+    ${sonarVulnerabilitiesSummary}
     """
     echo "GPT Prompt:\n${prompt}"
 
@@ -549,9 +556,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
                 <meta charset="UTF-8">
                 <title>Security Report - Build Summary</title>
                 <style>
-                    body { font-family: Arial, sans-serif;
-                        background-color: #f9f9f9;
-                        margin: 40px; }
+                    body { font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 40px; }
                     h1, h2 { color: #2c3e50; }
                     .section { margin-bottom: 25px; }
                     ul { margin-top: 0; padding-left: 20px; }
@@ -610,6 +615,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     }
 }
 
+
 def formatSonarQubeIssues(issues) {
     return issues.collect { issue ->
         "<li><strong>${issue.severity}:</strong> ${issue.message} | <strong>Component:</strong> ${issue.component}</li>"
@@ -663,7 +669,6 @@ def getSonarQubeSummary() {
     def projectKey = "Java-App"
     def sonarHost = "http://3.110.120.130:9000"
 
-    // Get project status (quality gate)
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def qualityGateResponse = sh(script: "curl -s ${apiQualityGateUrl}", returnStdout: true).trim()
     echo "Quality Gate Response: ${qualityGateResponse}"
@@ -679,7 +684,6 @@ def getSonarQubeSummary() {
     def qualityGateStatus = qualityGateJson?.projectStatus?.status
     def qualityGateSummary = qualityGateStatus == "OK" ? "SonarQube Quality Gate Passed" : "SonarQube Quality Gate Failed: ${qualityGateStatus}"
 
-    // Get detailed issues (code smells, vulnerabilities, etc.)
     def apiIssuesUrl = "${sonarHost}/api/issues/search?projectKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&severities=BLOCKER,CRITICAL,MAJOR&ps=1000"
     def issuesResponse = sh(script: "curl -s ${apiIssuesUrl}", returnStdout: true).trim()
 
@@ -694,15 +698,25 @@ def getSonarQubeSummary() {
     def codeSmells = []
     def vulnerabilities = []
 
-    // Categorize issues
     issuesJson?.issues?.each { issue ->
+        def issueEntry = [
+            id: issue.key,
+            message: issue.message,
+            severity: issue.severity,
+            component: issue.componentKey
+        ]
+
         if (issue.type == "CODE_SMELL") {
-            codeSmells.add(["id": issue.key, "message": issue.message, "severity": issue.severity, "component": issue.componentKey])
+            codeSmells.add(issueEntry)
         } else if (issue.type == "VULNERABILITY") {
-            vulnerabilities.add(["id": issue.key, "message": issue.message, "severity": issue.severity, "component": issue.componentKey])
+            vulnerabilities.add(issueEntry)
         }
     }
 
-    return [codeSmells: codeSmells, vulnerabilities: vulnerabilities, qualityGateSummary: qualityGateSummary, qualityGateStatus: qualityGateStatus]
+    return [
+        codeSmells: codeSmells,
+        vulnerabilities: vulnerabilities,
+        qualityGateSummary: qualityGateSummary,
+        qualityGateStatus: qualityGateStatus
+    ]
 }
-
