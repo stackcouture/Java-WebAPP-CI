@@ -1,4 +1,5 @@
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 
 pipeline {
     agent {
@@ -944,7 +945,7 @@ def getDependencyTrackFindings() {
         returnStdout: true
     ).trim()
 
-    def uuid = new groovy.json.JsonSlurperClassic().parseText(projectUuid).find { it.version == projectVersion }?.uuid
+    def uuid = new groovy.json.JsonSlurper().parseText(projectUuid).find { it.version == projectVersion }?.uuid
 
     if (!uuid) {
         error "❌ Dependency-Track project UUID not found for ${projectName}:${projectVersion}"
