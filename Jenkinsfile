@@ -112,7 +112,9 @@ pipeline {
                             ${scannerHome}/bin/sonar-scanner \
                                 -X \
                                 -Dsonar.projectKey=Java-App \
-                                -Dsonar.java.binaries=target/classes
+                                -Dsonar.java.binaries=target/classes \
+                                -Dsonar.sources=src/main/java \
+                                -Dsonar.exclusions=**/*.js
                         """
                     }
                 }
