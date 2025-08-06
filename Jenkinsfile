@@ -444,11 +444,11 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
-    def sonarSummary = getSonarQubeSummary()
+    //def sonarSummary = getSonarQubeSummary()
 
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
-    echo "SonarQube Summary:\n${sonarSummary}"
+    //echo "SonarQube Summary:\n${sonarSummary}"
 
     def prompt = """
     You are a security analyst assistant.
@@ -470,7 +470,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Scan Status Summary:
     - Trivy: ${trivyStatus}
     - Snyk: ${snykStatus}
-    - SonarQube: ${sonarSummary}
 
     --- Trivy Top Issues ---
     ${trivySummary}
@@ -478,8 +477,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     --- Snyk Top Issues ---
     ${snykSummary}
 
-    --- SonarQube Issues ---
-    ${sonarSummary}
     """
     echo "GPT Prompt:\n${prompt}"
 
