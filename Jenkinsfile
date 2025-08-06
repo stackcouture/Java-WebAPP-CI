@@ -54,20 +54,89 @@ pipeline {
             }
         }
 
-        stage('Publish SBOM') {
+        stage('Publish and Upload SBOM to Dependency-Track') {
             steps {
-                script {
-                    def sbomFile = 'target/bom.xml'
-                    if (fileExists(sbomFile)) {
+                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+                    script {
+                        def sbomFile = 'target/bom.xml'
+                        def projectName = "${params.ECR_REPO_NAME}"
+                        def projectVersion = "${env.COMMIT_SHA}"
+                        def dependencyTrackUrl = 'http://13.201.191.212:8081/api/v1/bom'
+
+                        if (!fileExists(sbomFile)) {
+                            error "❌ SBOM not found: ${sbomFile}"
+                        }
+
+                        // Archive the SBOM file
                         archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
-                        echo "SBOM archived: ${sbomFile}"
-                    }
-                    else {
-                        error "SBOM not found: ${sbomFile}"
+                        echo "📦 SBOM archived: ${sbomFile}"
+
+                        // Upload to Dependency-Track
+                        echo "📤 Uploading SBOM to Dependency-Track for ${projectName}:${projectVersion}"
+                        sh """
+                            curl -X POST "${dependencyTrackUrl}" \
+                                -H "X-Api-Key: ${DT_API_KEY}" \
+                                -H "Content-Type: multipart/form-data" \
+                                -F "autoCreate=true" \
+                                -F "projectName=${projectName}" \
+                                -F "projectVersion=${projectVersion}" \
+                                -F "bom=@${sbomFile}"
+                        """
                     }
                 }
             }
         }
+
+
+        // stage('Publish SBOM') {
+        //     steps {
+        //         script {
+        //             def sbomFile = 'target/bom.xml'
+        //             if (fileExists(sbomFile)) {
+        //                 archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+        //                 echo "SBOM archived: ${sbomFile}"
+        //             }
+        //             else {
+        //                 error "SBOM not found: ${sbomFile}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage('Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+        //             script {
+        //                 def sbomFile = 'target/bom.xml'
+        //                 if (!fileExists(sbomFile)) {
+        //                     error "❌ SBOM file not found: ${sbomFile}"
+        //                 }
+
+        //                 def projectName = "${params.ECR_REPO_NAME}"
+        //                 def projectVersion = "${env.COMMIT_SHA}"
+        //                 def dependencyTrackUrl = 'http://13.201.191.212:8081//api/v1/bom'
+
+        //                 echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
+
+        //                 withEnv([
+        //                     "DEPTRACK_URL=${dependencyTrackUrl}",
+        //                     "PROJECT_NAME=${projectName}",
+        //                     "PROJECT_VERSION=${projectVersion}"
+        //                 ]) {
+        //                     sh '''#!/bin/bash
+        //                         curl -X POST "$DEPTRACK_URL" \
+        //                             -H "X-Api-Key: $DT_API_KEY" \
+        //                             -H "Content-Type: multipart/form-data" \
+        //                             -F "autoCreate=true" \
+        //                             -F "projectName=$PROJECT_NAME" \
+        //                             -F "projectVersion=$PROJECT_VERSION" \
+        //                             -F "bom=@target/bom.xml"
+        //                     '''
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Prepare Trivy Template') {
             steps {
@@ -92,51 +161,39 @@ pipeline {
                 }
             }
         }
-
-        // stage('Sonar Analysis') {
+    
+        // stage('SonarQube Analysis') {
         //     steps {
-        //         withSonarQubeEnv('sonar-server') {
-	    //            sh ''' 
-        //         		mvn clean verify sonar:sonar \
-        //         		-Dsonar.projectKey=Java-App
-	    //                '''
+        //         script {
+        //             def scannerHome = tool 'sonar-scanner'
+        //             withSonarQubeEnv('sonar-server') {
+        //                 sh """
+        //                     ${scannerHome}/bin/sonar-scanner \
+        //                         -Dsonar.projectKey=Java-App \
+        //                         -Dsonar.java.binaries=target/classes \
+        //                         -Dsonar.sources=src/main/java,src/test/java \
+        //                         -Dsonar.exclusions=**/*.js
+        //                 """
         //             }
+        //         }
         //     }
         // }
 
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-                    def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv('sonar-server') {
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                                -X \
-                                -Dsonar.projectKey=Java-App \
-                                -Dsonar.java.binaries=target/classes \
-                                -Dsonar.sources=src/main/java,src/test/java \
-                                -Dsonar.exclusions=**/*.js
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Quality Gates') {
-            steps {
-                script {
-                    timeout(time: 5, unit: 'MINUTES') {
-                            def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
-                            if (qualityGate.status != 'OK') {
-                                error "SonarQube Quality Gate failed: ${qualityGate.status}"
-                            }   
-                            else {
-                                echo "SonarQube Quality Gate passed: ${qualityGate.status}"
-                            }
-                        }
-                    }	
-                }
-        }
+        // stage('Quality Gates') {
+        //     steps {
+        //         script {
+        //             timeout(time: 5, unit: 'MINUTES') {
+        //                     def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+        //                     if (qualityGate.status != 'OK') {
+        //                         error "SonarQube Quality Gate failed: ${qualityGate.status}"
+        //                     }   
+        //                     else {
+        //                         echo "SonarQube Quality Gate passed: ${qualityGate.status}"
+        //                     }
+        //                 }
+        //             }	
+        //         }
+        // }
 
         stage('Build Docker Image') {
             steps {
@@ -243,9 +300,7 @@ pipeline {
                         error("Environment variables COMMIT_SHA or BUILD_NUMBER are not set.")
                     }
 
-                    // Check if the report files exist
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-                       // runGptSecuritySummary("My Java App", env.COMMIT_SHA, env.BUILD_NUMBER, trivyHtmlPath, snykJsonPath)
                         runGptSecuritySummary(
                             "my-app", 
                             env.COMMIT_SHA, 
@@ -425,6 +480,153 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
+// def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
+//     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
+//     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
+//     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
+
+//     def trivyStatus = (
+//         trivySummary.toLowerCase().contains("no high") ||
+//         trivySummary.toLowerCase().contains("no critical")
+//     ) ? "OK" : "Issues Found"
+
+//     def snykLower = snykSummary.toLowerCase()
+//     def snykStatus = (
+//         snykLower.contains("no high") &&
+//         snykLower.contains("no critical") &&
+//         snykLower.contains("no medium")
+//     ) ? "OK" : "Issues Found"
+
+//     if (!snykSummary?.trim()) {
+//         snykSummary = "No high or critical vulnerabilities found by Snyk."
+//         snykStatus = "OK"
+//     }
+
+//     def sonarSummary = getSonarQubeSummary()
+//     def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
+//     def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
+
+//     def prompt = """
+//     You are a security analyst assistant.
+
+//     Generate a clean HTML security report based on the following scan data. Use only <h2>, <ul>, <p>, and <strong> tags. Avoid Markdown or code blocks.
+
+//     Include these sections:
+//     - Project Overview (project name, SHA, build number)
+//     - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
+//     - Code Smells Summary
+//     - License Issues (e.g., GPL, AGPL, LGPL)
+//     - Recommendations (2–4 practical points)
+//     - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
+
+//     Context:
+//     Project: ${projectName}
+//     Commit SHA: ${gitSha}
+//     Build Number: ${buildNumber}
+
+//     Scan Status Summary:
+//     - Trivy: ${trivyStatus}
+//     - Snyk: ${snykStatus}
+//     - SonarQube: ${sonarSummary.qualityGateSummary}
+
+//     --- Trivy Top Issues ---
+//     ${trivySummary}
+
+//     --- Snyk Top Issues ---
+//     ${snykSummary}
+
+//     --- SonarQube Issues ---
+//     Code Smells:
+//     ${sonarCodeSmellsSummary}
+
+//     Vulnerabilities:
+//     ${sonarVulnerabilitiesSummary}
+//     """
+
+//     def gptPromptFile = "openai_prompt.json"
+//     def gptOutputFile = "openai_response.json"
+//     def gptReportFile = "ai_report.html"
+
+//     def payload = [
+//         model: "gpt-4o-mini",
+//         messages: [[role: "user", content: prompt]]
+//     ]
+
+//     writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
+
+//     withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
+//         def responseJson = sh(script: """
+//             curl -s https://api.openai.com/v1/chat/completions \\
+//             -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+//             -H "Content-Type: application/json" \\
+//             -d @${gptPromptFile}
+//         """, returnStdout: true).trim()
+
+//         echo "Response from OpenAI API: ${responseJson}"
+
+//         if (!responseJson) {
+//             error("Received empty or invalid response from OpenAI API")
+//         }
+
+//         writeFile file: gptOutputFile, text: responseJson
+
+//         try {
+//             def response = readJSON text: responseJson
+//             def gptContent = response?.choices?.get(0)?.message?.content
+
+//             if (!gptContent) {
+//                 error("GPT response is missing the expected content field")
+//             }
+
+//             gptContent = gptContent
+//                 .replaceAll(/(?m)^```html\s*/, "")
+//                 .replaceAll(/(?m)^```$/, "")
+//                 .trim()
+
+//             def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
+
+//             def htmlContent = """
+//             <!DOCTYPE html>
+//             <html>
+//             <head>
+//                 <meta charset="UTF-8">
+//                 <title>Security Report - Build Summary</title>
+//                 <style>
+//                     body { font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 40px; }
+//                     h1, h2 { color: #2c3e50; }
+//                     .section { margin-bottom: 25px; }
+//                     ul { margin-top: 0; padding-left: 20px; }
+//                     .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
+//                     .badge-ok { color: green; font-weight: bold; }
+//                     .badge-fail { color: red; font-weight: bold; }
+//                     a { color: #2c3e50; text-decoration: underline; }
+//                     footer { margin-top: 40px; font-size: 0.9em; color: #888; }
+//                 </style>
+//             </head>
+//             <body>
+//                 <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+
+//                 <div class="section">
+//                     <h2>AI Recommendations - Security Scan Summary</h2>
+//                     <div class="highlight">
+//                         ${gptContent}
+//                     </div>
+//                 </div>
+
+//                 <footer>
+//                     <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+//                 </footer>
+//             </body>
+//             </html>
+//             """
+//             writeFile file: gptReportFile, text: htmlContent
+//             echo "AI-powered GPT report generated: ${gptReportFile}"
+//         } catch (Exception e) {
+//             error("Failed to parse or process the GPT response: ${e.getMessage()}")
+//         }
+//     }
+// }
+
 def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
@@ -446,10 +648,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykSummary = "No high or critical vulnerabilities found by Snyk."
         snykStatus = "OK"
     }
-
-    def sonarSummary = getSonarQubeSummary()
-    def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
-    def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
     def prompt = """
     You are a security analyst assistant.
@@ -480,12 +678,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     --- Snyk Top Issues ---
     ${snykSummary}
 
-    --- SonarQube Issues ---
-    Code Smells:
-    ${sonarCodeSmellsSummary}
-
-    Vulnerabilities:
-    ${sonarVulnerabilitiesSummary}
     """
 
     def gptPromptFile = "openai_prompt.json"
