@@ -53,54 +53,19 @@ pipeline {
             }
         }
 
-        stage('Handle  SBOM') {
-            steps {
-                script {
-                    handleSbomUpload(
-                        sbomFile: 'target/bom.xml',
-                        projectName: "${params.ECR_REPO_NAME}",
-                        projectVersion: "${env.COMMIT_SHA}",
-                        dependencyTrackUrl: 'http://13.233.157.56:8081/api/v1/bom',
-                        apiKeyCredentialId: 'dependency-track-api-key'
-                    )
-                }
-            }
-        }
-
-        stage('Upload SBOM to Dependency-Track') {
-            steps {
-                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
-                    script {
-                        def sbomFile = 'target/bom.xml'
-                        if (!fileExists(sbomFile)) {
-                            error "❌ SBOM file not found: ${sbomFile}"
-                        }
-
-                        def projectName = "${params.ECR_REPO_NAME}"
-                        def projectVersion = "${env.COMMIT_SHA}"
-                        def dependencyTrackUrl = 'http://13.233.157.56:8081/api/v1/bom'
-
-                        echo "Uploading SBOM for ${projectName}:${projectVersion}"
-
-                        withEnv([
-                            "DEPTRACK_URL=${dependencyTrackUrl}",
-                            "PROJECT_NAME=${projectName}",
-                            "PROJECT_VERSION=${projectVersion}"
-                        ]) {
-                            sh '''#!/bin/bash
-                                curl -X POST "$DEPTRACK_URL" \
-                                    -H "X-Api-Key: $DT_API_KEY" \
-                                    -H "Content-Type: multipart/form-data" \
-                                    -F "autoCreate=true" \
-                                    -F "projectName=$PROJECT_NAME" \
-                                    -F "projectVersion=$PROJECT_VERSION" \
-                                    -F "bom=@target/bom.xml"
-                            '''
-                        }
-                    }
-                }
-            }
-        }
+        // stage('Handle  SBOM') {
+        //     steps {
+        //         script {
+        //             handleSbomUpload(
+        //                 sbomFile: 'target/bom.xml',
+        //                 projectName: "${params.ECR_REPO_NAME}",
+        //                 projectVersion: "${env.COMMIT_SHA}",
+        //                 dependencyTrackUrl: 'http://13.233.157.56:8081/api/v1/bom',
+        //                 apiKeyCredentialId: 'dependency-track-api-key'
+        //             )
+        //         }
+        //     }
+        // }
 
         stage('Prepare Trivy Template') {
             steps {
@@ -272,10 +237,7 @@ pipeline {
                             env.COMMIT_SHA, 
                             env.BUILD_NUMBER, 
                             trivyHtmlPath, 
-                            snykJsonPath, 
-                            "Java-App", 
-                            "http://35.154.164.253:9000", 
-                            env.SONAR_TOKEN
+                            snykJsonPath
                         )
                     } else {
                         error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
@@ -449,7 +411,7 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarProjectKey, String sonarHost, String sonarToken) {
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
@@ -471,8 +433,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
-    // ✅ Pass sonarProjectKey, sonarHost, and sonarToken
-    def sonarSummary = getSonarQubeSummary(sonarProjectKey, sonarHost, sonarToken)
+    def sonarSummary = getSonarQubeSummary()
     def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
     def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
@@ -646,7 +607,11 @@ def parseStatusBadge(String gptContent) {
     return [statusText, badgeColor, badgeClass]
 }
 
-def getSonarQubeSummary(String projectKey, String sonarHost, String sonarToken) {
+def getSonarQubeSummary() {
+    def projectKey = "Java-App" 
+    def sonarHost = "http://13.234.37.254:9000"
+    def sonarToken = env.SONAR_TOKEN
+
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
@@ -737,3 +702,38 @@ def getSonarFallbackResult() {
         sonarVulnerabilitiesSummary: "No vulnerability data available."
     ]
 }
+
+// def handleSbomUpload(Map config = [:]) {
+//     def sbomFile = config.sbomFile ?: 'target/bom.xml'
+//     def projectName = config.projectName ?: 'unknown-project'
+//     def projectVersion = config.projectVersion ?: 'latest'
+//     def dependencyTrackUrl = config.dependencyTrackUrl ?: ''
+//     def apiKeyCredentialId = config.apiKeyCredentialId ?: 'dependency-track-api-key'
+
+//     if (!fileExists(sbomFile)) {
+//         error "❌ SBOM file not found: ${sbomFile}"
+//     }
+
+//     echo "📦 Uploading SBOM for ${projectName}:${projectVersion} to Dependency-Track"
+
+//     withCredentials([string(credentialsId: apiKeyCredentialId, variable: 'DT_API_KEY')]) {
+//         withEnv([
+//             "DEPTRACK_URL=${dependencyTrackUrl}",
+//             "PROJECT_NAME=${projectName}",
+//             "PROJECT_VERSION=${projectVersion}",
+//             "SBOM_FILE=${sbomFile}"
+//         ]) {
+//             sh '''#!/bin/bash
+//                 curl -s -o /dev/null -w "%{http_code}" -X POST "$DEPTRACK_URL" \
+//                     -H "X-Api-Key: $DT_API_KEY" \
+//                     -H "Content-Type: multipart/form-data" \
+//                     -F "autoCreate=true" \
+//                     -F "projectName=$PROJECT_NAME" \
+//                     -F "projectVersion=$PROJECT_VERSION" \
+//                     -F "bom=@$SBOM_FILE"
+//             '''
+//         }
+//     }
+
+//     echo "✅ SBOM uploaded for ${projectName}:${projectVersion}"
+// }
