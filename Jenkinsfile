@@ -18,6 +18,7 @@ pipeline {
         SNYK_TOKEN = credentials('SNYK_TOKEN')
         OPENAI_API_KEY = credentials('openai-api-key') 
         PDF_REPORT = 'ai_report.pdf'
+        SONAR_TOKEN = credentials('sonar-token')
     }
 
     tools {
@@ -244,7 +245,17 @@ pipeline {
 
                     // Check if the report files exist
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-                        runGptSecuritySummary("My Java App", env.COMMIT_SHA, env.BUILD_NUMBER, trivyHtmlPath, snykJsonPath)
+                       // runGptSecuritySummary("My Java App", env.COMMIT_SHA, env.BUILD_NUMBER, trivyHtmlPath, snykJsonPath)
+                        runGptSecuritySummary(
+                            "my-app", 
+                            env.COMMIT_SHA, 
+                            env.BUILD_NUMBER, 
+                            trivyHtmlPath, 
+                            snykJsonPath, 
+                            "Java-App", 
+                            "http://35.154.164.253:9000", 
+                            env.SONAR_TOKEN
+                        )
                     } else {
                         error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
                     }
@@ -424,7 +435,7 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath, String sonarProjectKey, String sonarHost, String sonarToken) {
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
@@ -446,21 +457,14 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
         snykStatus = "OK"
     }
 
-    def sonarSummary = getSonarQubeSummary()
-    def sonarIssues = sonarSummary?.codeSmells + sonarSummary?.vulnerabilities
-
-    // Summarize SonarQube Code Smells and Vulnerabilities
-    def sonarCodeSmellsSummary = sonarSummary.codeSmells.collect { 
-        return "Severity: ${it.severity}, Message: ${it.message}" 
-    }.join("\n")
-
-    def sonarVulnerabilitiesSummary = sonarSummary.vulnerabilities.collect { 
-        return "Severity: ${it.severity}, Message: ${it.message}" 
-    }.join("\n")
+    // ✅ Pass sonarProjectKey, sonarHost, and sonarToken
+    def sonarSummary = getSonarQubeSummary(sonarProjectKey, sonarHost, sonarToken)
+    def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
+    def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
     echo "Trivy Summary:\n${trivySummary}"
     echo "Snyk Summary:\n${snykSummary}"
-    echo "SonarQube Summary:\n${sonarSummary}"
+    echo "SonarQube Summary:\n${sonarSummary.qualityGateSummary}"
 
     def prompt = """
     You are a security analyst assistant.
@@ -498,7 +502,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Vulnerabilities:
     ${sonarVulnerabilitiesSummary}
     """
-    echo "GPT Prompt:\n${prompt}"
 
     def gptPromptFile = "openai_prompt.json"
     def gptOutputFile = "openai_response.json"
@@ -521,29 +524,20 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
 
         echo "Response from OpenAI API: ${responseJson}"
 
-        // Check if the response is empty or invalid
-        if (responseJson == null || responseJson.isEmpty()) {
+        if (!responseJson) {
             error("Received empty or invalid response from OpenAI API")
         }
 
         writeFile file: gptOutputFile, text: responseJson
 
         try {
-            // Check if the response is a valid JSON string
-            def response = null
-            try {
-                response = readJSON text: responseJson
-            } catch (Exception e) {
-                error("Failed to parse JSON response: ${e.getMessage()}")
-            }
-
-            // Check if the expected 'choices' and 'message' content are in the response
+            def response = readJSON text: responseJson
             def gptContent = response?.choices?.get(0)?.message?.content
+
             if (!gptContent) {
                 error("GPT response is missing the expected content field")
             }
 
-            // Clean the GPT content
             gptContent = gptContent
                 .replaceAll(/(?m)^```html\s*/, "")
                 .replaceAll(/(?m)^```$/, "")
@@ -618,6 +612,7 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
 }
 
 
+
 def formatSonarQubeIssues(issues) {
     return issues.collect { issue ->
         "<li><strong>${issue.severity}:</strong> ${issue.message} | <strong>Component:</strong> ${issue.component}</li>"
@@ -667,58 +662,96 @@ def parseStatusBadge(String gptContent) {
     return [statusText, badgeColor, badgeClass]
 }
 
-def getSonarQubeSummary() {
-    def projectKey = "Java-App"
-    def sonarHost = "http://35.154.164.253:9000"
-
+def getSonarQubeSummary(String projectKey, String sonarHost, String sonarToken) {
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
-    def qualityGateResponse = sh(script: "curl -s ${apiQualityGateUrl}", returnStdout: true).trim()
-    echo "Quality Gate Response: ${qualityGateResponse}"
+    def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
-    def qualityGateJson
+    def qualityGateJson = null
+    def issuesJson = null
+
     try {
-        qualityGateJson = readJSON text: qualityGateResponse
-    } catch (Exception e) {
-        echo "Error parsing quality gate JSON: ${e.message}"
-        return
-    }
+        def qualityGateResponse = sh(
+            script: "curl -sf -u ${sonarToken}: ${apiQualityGateUrl}",
+            returnStdout: true
+        ).trim()
 
-    def qualityGateStatus = qualityGateJson?.projectStatus?.status
-    def qualityGateSummary = qualityGateStatus == "OK" ? "SonarQube Quality Gate Passed" : "SonarQube Quality Gate Failed: ${qualityGateStatus}"
-
-    def apiIssuesUrl = "${sonarHost}/api/issues/search?projectKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&severities=BLOCKER,CRITICAL,MAJOR&ps=1000"
-    def issuesResponse = sh(script: "curl -s ${apiIssuesUrl}", returnStdout: true).trim()
-
-    def issuesJson
-    try {
-        issuesJson = readJSON text: issuesResponse
-    } catch (Exception e) {
-        echo "Error parsing issues JSON: ${e.message}"
-        return
-    }
-
-    def codeSmells = []
-    def vulnerabilities = []
-
-    issuesJson?.issues?.each { issue ->
-        def issueEntry = [
-            id: issue.key,
-            message: issue.message,
-            severity: issue.severity,
-            component: issue.componentKey
-        ]
-
-        if (issue.type == "CODE_SMELL") {
-            codeSmells.add(issueEntry)
-        } else if (issue.type == "VULNERABILITY") {
-            vulnerabilities.add(issueEntry)
+        if (!qualityGateResponse) {
+            echo "Empty response from SonarQube Quality Gate API: ${apiQualityGateUrl}"
+            return getSonarFallbackResult()
         }
+
+        qualityGateJson = readJSON text: qualityGateResponse
+
+    } catch (Exception e) {
+        echo "Error fetching or parsing SonarQube Quality Gate response: ${e.message}"
+        return getSonarFallbackResult()
     }
+
+    try {
+        def issuesResponse = sh(
+            script: "curl -sf -u ${sonarToken}: ${apiIssuesUrl}",
+            returnStdout: true
+        ).trim()
+
+        if (!issuesResponse) {
+            echo "Empty response from SonarQube Issues API: ${apiIssuesUrl}"
+            return getSonarFallbackResult()
+        }
+
+        issuesJson = readJSON text: issuesResponse
+
+    } catch (Exception e) {
+        echo "Error fetching or parsing SonarQube Issues response: ${e.message}"
+        return getSonarFallbackResult()
+    }
+
+    def issues = issuesJson.issues ?: []
+
+    def codeSmells = issues.findAll { it.type == 'CODE_SMELL' }.collect {
+        [
+            severity: it.severity,
+            message: it.message
+        ]
+    }
+
+    def vulnerabilities = issues.findAll { it.type == 'VULNERABILITY' }.collect {
+        [
+            severity: it.severity,
+            message: it.message
+        ]
+    }
+
+    def sonarCodeSmellsSummary = codeSmells.collect {
+        "Severity: ${it.severity}, Message: ${it.message}"
+    }.join("\n")
+
+    def sonarVulnerabilitiesSummary = vulnerabilities.collect {
+        "Severity: ${it.severity}, Message: ${it.message}"
+    }.join("\n")
+
+    def qualityGateStatus = qualityGateJson?.projectStatus?.status ?: "UNKNOWN"
+    def qualityGateSummary = "Quality Gate Status: ${qualityGateStatus}"
 
     return [
         codeSmells: codeSmells,
         vulnerabilities: vulnerabilities,
         qualityGateSummary: qualityGateSummary,
-        qualityGateStatus: qualityGateStatus
+        qualityGateStatus: qualityGateStatus,
+        sonarCodeSmellsSummary: sonarCodeSmellsSummary,
+        sonarVulnerabilitiesSummary: sonarVulnerabilitiesSummary
     ]
 }
+
+// Fallback result if API fails
+def getSonarFallbackResult() {
+    return [
+        codeSmells: [],
+        vulnerabilities: [],
+        qualityGateSummary: "SonarQube analysis failed or returned no data.",
+        qualityGateStatus: "ERROR",
+        sonarCodeSmellsSummary: "No code smells data available.",
+        sonarVulnerabilitiesSummary: "No vulnerability data available."
+    ]
+}
+
+
