@@ -670,7 +670,6 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber,
     Scan Status Summary:
     - Trivy: ${trivyStatus}
     - Snyk: ${snykStatus}
-    - SonarQube: ${sonarSummary.qualityGateSummary}
 
     --- Trivy Top Issues ---
     ${trivySummary}
