@@ -16,6 +16,8 @@ pipeline {
     environment {
         REGION = 'ap-south-1'
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
+        SLACK_CHANNEL = '#all-jenkins'
+        SLACK_TOKEN = credentials('slack-token')
     }
 
     tools {
@@ -189,36 +191,16 @@ pipeline {
     }
 
     post {
-        // always {
-        //     script {
-                
-        //         archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
-        //         if (fileExists('target/surefire-reports')) {
-        //             junit 'target/surefire-reports/*.xml'
-        //         } else {
-        //             echo "No test results found."
-        //         }
-                
-        //         publishHTML(target: [
-        //                 reportName: 'Test Report',
-        //                 reportFiles: 'target/**.html',
-        //                 reportTitles: 'Test Report'
-        //         ])
-        //     }
-        // }
-
         always {
             script {
                 archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
 
-                junit 'target/surefire-reports/*.xml'
+                if (fileExists('target/surefire-reports')) {
+                    junit 'target/surefire-reports/*.xml'
+                }
 
-                publishHTML(target: [
-                    reportName: 'Test Report',
-                    reportDir: 'target',
-                    reportFiles: 'target/**.html',
-                    reportTitle: 'Test Report',
-                    keepAll: true
+                publishHTML([
+                        reportFiles: 'target/**.html',
                 ])
             }
         }
@@ -231,6 +213,26 @@ pipeline {
                     to: 'naveenramlu@gmail.com'
                 )
             }
+            sendSlackNotification('SUCCESS', 'good')
         }
+
+        failure {
+            script {
+                sendSlackNotification('FAILURE', 'danger')
+            }
+        }
+
+        unstable {
+            script {
+                sendSlackNotification('UNSTABLE', 'warning')
+            }
+        }
+
+        aborted {
+            script {
+                sendSlackNotification('ABORTED', '#808080')
+            }
+        }
+
     }
 }
