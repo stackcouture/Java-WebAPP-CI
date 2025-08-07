@@ -386,69 +386,118 @@ def getDependencyTrackFindings() {
     def dtrackHost = 'http://13.201.191.212:8081'
     def dtrackToken = env.DEP_TRACK_API_KEY
 
-    def encodedName = URLEncoder.encode(projectName, "UTF-8")
-    def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
+    def encodedProjectName = java.net.URLEncoder.encode(projectName, "UTF-8")
+    def encodedProjectVersion = java.net.URLEncoder.encode(projectVersion, "UTF-8")
 
-    def projectUuid = ''
-    def findingsJson = ''
+    def projectLookupUrl = "${dtrackHost}/api/v1/project?name=${encodedProjectName}&version=${encodedProjectVersion}"
 
-    script {
-        echo "🔍 Looking up Dependency-Track project: ${projectName}:${projectVersion}"
+    def projectResponse = httpRequest(
+        httpMode: 'GET',
+        url: projectLookupUrl,
+        customHeaders: [[name: 'X-Api-Key', value: dtrackToken]],
+        validResponseCodes: '200'
+    )
 
-        withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
-            def lookupResponse = sh(
-                script: """
-                    curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
-                    "${dtrackHost}/api/v1/project/lookup?name=${encodedName}&version=${encodedVersion}"
-                """,
-                returnStdout: true
-            ).trim()
+    def projectJson = new groovy.json.JsonSlurper().parseText(projectResponse.content)
 
-            if (!lookupResponse || lookupResponse.contains("Not Found") || lookupResponse.startsWith("<html")) {
-                error "❌ Project not found in Dependency-Track for ${projectName}:${projectVersion}"
-            }
-
-            def projectInfo = new JsonSlurper().parseText(lookupResponse)
-            projectUuid = projectInfo.uuid
-
-            if (!projectUuid) {
-                error "❌ UUID not found in Dependency-Track response for project ${projectName}"
-            }
-
-            echo "✅ Found project UUID: ${projectUuid}"
-        }
+    if (!projectJson || projectJson.size() == 0) {
+        echo "[ERROR] Project not found in Dependency-Track: ${projectName} (${projectVersion})"
+        return ""
     }
 
-    script {
-        echo "📥 Fetching findings for project UUID: ${projectUuid}"
-
-        withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
-            findingsJson = sh(
-                script: """
-                    curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
-                    "${dtrackHost}/api/v1/finding/project/${projectUuid}"
-                """,
-                returnStdout: true
-            ).trim()
-
-            if (!findingsJson || !findingsJson.startsWith("[")) {
-                error "❌ Invalid findings JSON from Dependency-Track: ${findingsJson.take(200)}"
-            }
-
-            writeFile file: 'dependency-track-findings.json', text: findingsJson
-            echo "✅ Findings written to dependency-track-findings.json"
-        }
+    def projectUuid = projectJson[0]?.uuid
+    if (!projectUuid) {
+        echo "[ERROR] Project UUID not found in response."
+        return ""
     }
 
-    return 'dependency-track-findings.json'
+    def findingsUrl = "${dtrackHost}/api/v1/project/${projectUuid}/findings"
+
+    def findingsResponse = httpRequest(
+        httpMode: 'GET',
+        url: findingsUrl,
+        customHeaders: [[name: 'X-Api-Key', value: dtrackToken]],
+        validResponseCodes: '200'
+    )
+
+    // Write findings to a JSON file
+    def findingsJsonPath = "dependency-track-findings.json"
+    writeFile file: findingsJsonPath, text: findingsResponse.content
+    echo "✅ Dependency-Track findings written to ${findingsJsonPath}"
+
+    return findingsJsonPath
 }
+
+
+// def getDependencyTrackFindings() {
+//     def projectName = params.ECR_REPO_NAME
+//     def projectVersion = env.COMMIT_SHA
+//     def dtrackHost = 'http://13.201.191.212:8081'
+//     def dtrackToken = env.DEP_TRACK_API_KEY
+
+//     def encodedName = URLEncoder.encode(projectName, "UTF-8")
+//     def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
+
+//     def projectUuid = ''
+//     def findingsJson = ''
+
+//     script {
+//         echo "🔍 Looking up Dependency-Track project: ${projectName}:${projectVersion}"
+
+//         withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+//             def lookupResponse = sh(
+//                 script: """
+//                     curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+//                     "${dtrackHost}/api/v1/project/lookup?name=${encodedName}&version=${encodedVersion}"
+//                 """,
+//                 returnStdout: true
+//             ).trim()
+
+//             if (!lookupResponse || lookupResponse.contains("Not Found") || lookupResponse.startsWith("<html")) {
+//                 error "❌ Project not found in Dependency-Track for ${projectName}:${projectVersion}"
+//             }
+
+//             def projectInfo = new JsonSlurper().parseText(lookupResponse)
+//             projectUuid = projectInfo.uuid
+
+//             if (!projectUuid) {
+//                 error "❌ UUID not found in Dependency-Track response for project ${projectName}"
+//             }
+
+//             echo "✅ Found project UUID: ${projectUuid}"
+//         }
+//     }
+
+//     script {
+//         echo "📥 Fetching findings for project UUID: ${projectUuid}"
+
+//         withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+//             findingsJson = sh(
+//                 script: """
+//                     curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+//                     "${dtrackHost}/api/v1/finding/project/${projectUuid}"
+//                 """,
+//                 returnStdout: true
+//             ).trim()
+
+//             if (!findingsJson || !findingsJson.startsWith("[")) {
+//                 error "❌ Invalid findings JSON from Dependency-Track: ${findingsJson.take(200)}"
+//             }
+
+//             writeFile file: 'dependency-track-findings.json', text: findingsJson
+//             echo "✅ Findings written to dependency-track-findings.json"
+//         }
+//     }
+
+//     return 'dependency-track-findings.json'
+// }
 
 def extractTopVulnsFromDt(List findings) {
     if (!(findings instanceof List) || findings.isEmpty()) {
         return "<h2>Dependency-Track Summary</h2><p>No vulnerabilities found by Dependency-Track.</p>"
     }
 
-    // Defensive filtering
+    // Filter out relevant severities
     def topFindings = findings.findAll { f ->
         try {
             f instanceof Map &&
@@ -463,7 +512,6 @@ def extractTopVulnsFromDt(List findings) {
         return "<h2>Dependency-Track Summary</h2><p>No high, critical, or medium vulnerabilities found by Dependency-Track.</p>"
     }
 
-    // Ensure we only group valid entries
     def grouped = topFindings.findAll { it?.severity }.groupBy { it.severity.toUpperCase() }
     def report = new StringBuilder("<h2>Dependency-Track Summary</h2>")
 
