@@ -1,5 +1,15 @@
 import groovy.json.JsonOutput
 
+def checkoutGit(String gitUrl, String gitBranch) {
+    checkout([
+        $class: 'GitSCM',
+        branches: [[name: gitBranch]],
+        userRemoteConfigs: [
+            [url: gitUrl, credentialsId: 'github-pat']
+        ]
+    ])
+}
+
 pipeline {
     agent {
         label "jenkins-agent"
@@ -34,13 +44,14 @@ pipeline {
                     def gitBranch = params.BRANCH
                     def gitUrl = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
 
-                    checkout([
-                        $class: 'GitSCM',
-                        branches: [[name: "*/${gitBranch}"]],
-                        userRemoteConfigs: [
-                            [url: gitUrl, credentialsId: 'github-pat']
-                        ]
-                    ])
+                    checkoutGit(gitBranch, gitUrl) 
+                    // checkout([
+                    //     $class: 'GitSCM',
+                    //     branches: [[name: "*/${gitBranch}"]],
+                    //     userRemoteConfigs: [
+                    //         [url: gitUrl, credentialsId: 'github-pat']
+                    //     ]
+                    // ])
                 }
             }
         }
