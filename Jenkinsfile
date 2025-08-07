@@ -52,29 +52,30 @@ pipeline {
     post {
         always {
             script {
-                // Archive all test result XML files, if any exist
+                // Archive Surefire test reports
                 archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
+                
+                // Check if the test reports exist and publish them
                 if (fileExists('target/surefire-reports')) {
                     junit 'target/surefire-reports/*.xml'
                 } else {
                     echo "No test results found."
                 }
 
-                // Check if HTML report exists before publishing
-                def htmlReportExists = fileExists('target/**.html')
-                if (htmlReportExists) {
-                    // Publish HTML reports only if they exist
+                // Check if any HTML report files exist in target directory
+                def htmlReportExists = sh(script: "find target -name '*.html' | wc -l", returnStdout: true).trim()
+
+                if (htmlReportExists.toInteger() > 0) {
+                    // If HTML reports exist, publish the HTML report
                     publishHTML(target: [
                         reportName: 'Test Report',
-                        reportFiles: 'target/**.html',
+                        reportFiles: 'target/**/*.html', // Adjust this path if needed
                         reportTitles: 'Test Report'
                     ])
                 } else {
-                    echo "No HTML report found to publish."
+                    echo "No HTML report found."
                 }
             }
         }
     }
 }
-
-
