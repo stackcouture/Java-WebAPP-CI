@@ -9,6 +9,7 @@ def checkoutGit(String gitBranch, String gitUrl) {
         ]
     ])
 }
+@Library('my-shared-library')
 
 pipeline {
     agent {
@@ -34,7 +35,8 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                cleanWs()
+                //cleanWs()
+                cleanWorkspace()
             }
         }
 
@@ -43,9 +45,6 @@ pipeline {
                 script {
                     def gitBranch = params.BRANCH
                     def gitUrl = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
-
-                    echo "Branch name: ${gitBranch}"
-                    echo "Git URL: ${gitUrl}"
 
                     checkoutGit(gitBranch, gitUrl) 
                     
