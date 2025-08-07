@@ -76,6 +76,89 @@ pipeline {
                 }
             }
         }
+
+        stage('Build Docker Image') {
+            steps {
+                 script {
+                    buildDockerImage("${params.ECR_REPO_NAME}:${env.COMMIT_SHA}")
+                    //sh "docker build -t ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} ."
+                 }
+            }
+        }
+
+        stage('Security Scans Before Push') {
+            parallel {
+                stage('Trivy Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runTrivyScanUnified("before-push", localTag, "image")
+                        }
+                    }
+                }
+                stage('Snyk Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runSnykScan("before-push", localTag)
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                script {
+                    dockerPush("docker-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", params.ECR_REPO_NAME, params.AWS_ACCOUNT_ID, params.REGION)
+                }
+            }
+        }
+
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                     options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runTrivyScanUnified("after-push", pushedTag, "image")
+                        }
+                    }
+                }
+                stage('Snyk After Push') {
+                     options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            retry(2) {
+                                runSnykScan("after-push", pushedTag)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Cleanup Local Image Tags') {
+            steps {
+                sh """
+                    docker rmi ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} || true
+                    docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA} || true
+                """
+            }
+        }
+
     }
 
     post {
