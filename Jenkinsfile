@@ -142,7 +142,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/fs.html,  allowEmptyArchive: true
+            archiveArtifacts artifacts: '**/fs.html', allowEmptyArchive: true
             script {
                 if (fileExists('target/surefire-reports')) {
                     junit 'target/surefire-reports/*.xml'
