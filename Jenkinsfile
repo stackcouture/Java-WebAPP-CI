@@ -159,6 +159,33 @@ pipeline {
             }
         }
 
+        stage('Generate GPT Report') {
+            steps {
+                script {
+
+                    def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+                    def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+
+                    // Check if necessary environment variables are set
+                    if (!env.COMMIT_SHA || !env.BUILD_NUMBER) {
+                        error("Environment variables COMMIT_SHA or BUILD_NUMBER are not set.")
+                    }
+
+                    if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
+                        runGptSecuritySummary(
+                            "my-app", 
+                            env.COMMIT_SHA, 
+                            env.BUILD_NUMBER, 
+                            trivyHtmlPath, 
+                            snykJsonPath
+                        )
+                    } else {
+                        error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
+                    }
+                }   
+            } 
+        }
+
     }
 
     post {
@@ -183,6 +210,48 @@ pipeline {
                     ])
                 } else {
                     echo "No HTML report found to publish."
+                }
+            }
+        }
+
+        success {
+            script {
+                if (fileExists("ai_report.html")) {
+                    // sh "pandoc ai_report.html -f html -t pdf -o ${env.PDF_REPORT} --standalone --pdf-engine=wkhtmltopdf"
+                    sh "wkhtmltopdf --zoom 1.3 --enable-local-file-access ai_report.html ai_report.pdf"
+
+                    emailext(
+                        subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
+                          body: """
+                                 <html>
+                                    <body style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;">
+                                        <h2 style="color: #2c3e50;">Hello Team,</h2>
+                                        <p>
+                                            Please find attached the <strong>AI-generated security report</strong> for <strong>Build #${env.BUILD_NUMBER}</strong>.
+                                        </p>
+                                        <p>
+                                            This report summarizes the security scan results from <strong>Trivy</strong> and <strong>Snyk</strong> for the current build.
+                                        </p>
+                                        <p>
+                                            <strong>Project:</strong> ${env.JOB_NAME}<br/>
+                                            <strong>Branch:</strong> ${params.BRANCH}<br/>
+                                            <strong>Commit:</strong> ${env.COMMIT_SHA}
+                                        </p>
+                                        <p>
+                                            For detailed insights, please open the attached PDF report.
+                                        </p>
+                                        <p>
+                                            Regards,<br/>
+                                            <strong>Jenkins CI/CD</strong> 🤖
+                                        </p>
+                                    </body>
+                                    </html>
+                            """,
+                        mimeType: 'text/html',
+                        attachmentsPattern: 'ai_report.pdf',
+                        to: 'naveenramlu@gmail.com',
+                        attachLog: false
+                    )
                 }
             }
         }
