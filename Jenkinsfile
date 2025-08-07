@@ -189,20 +189,36 @@ pipeline {
     }
 
     post {
+        // always {
+        //     script {
+                
+        //         archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
+        //         if (fileExists('target/surefire-reports')) {
+        //             junit 'target/surefire-reports/*.xml'
+        //         } else {
+        //             echo "No test results found."
+        //         }
+                
+        //         publishHTML(target: [
+        //                 reportName: 'Test Report',
+        //                 reportFiles: 'target/**.html',
+        //                 reportTitles: 'Test Report'
+        //         ])
+        //     }
+        // }
+
         always {
             script {
-                
                 archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
-                if (fileExists('target/surefire-reports')) {
-                    junit 'target/surefire-reports/*.xml'
-                } else {
-                    echo "No test results found."
-                }
-                
+
+                junit 'target/surefire-reports/*.xml'
+
                 publishHTML(target: [
-                        reportName: 'Test Report',
-                        reportFiles: 'target/**.html',
-                        reportTitles: 'Test Report'
+                    reportName: 'Test Report',
+                    reportDir: 'target',
+                    reportFiles: 'target/**.html',
+                    reportTitle: 'Test Report',
+                    keepAll: true
                 ])
             }
         }
@@ -214,43 +230,6 @@ pipeline {
                     commit: env.COMMIT_SHA ?: 'unknown',
                     to: 'naveenramlu@gmail.com'
                 )
-                // if (fileExists("ai_report.html")) {
-                //     // sh "pandoc ai_report.html -f html -t pdf -o ${env.PDF_REPORT} --standalone --pdf-engine=wkhtmltopdf"
-                //     sh "wkhtmltopdf --zoom 1.3 --enable-local-file-access ai_report.html ai_report.pdf"
-
-                //     emailext(
-                //         subject: "Security Report - Build #${env.BUILD_NUMBER} - SUCCESS",
-                //           body: """
-                //                  <html>
-                //                     <body style="font-family: Arial, sans-serif; font-size: 15px; line-height: 1.6; padding: 10px;">
-                //                         <h2 style="color: #2c3e50;">Hello Team,</h2>
-                //                         <p>
-                //                             Please find attached the <strong>AI-generated security report</strong> for <strong>Build #${env.BUILD_NUMBER}</strong>.
-                //                         </p>
-                //                         <p>
-                //                             This report summarizes the security scan results from <strong>Trivy</strong> and <strong>Snyk</strong> for the current build.
-                //                         </p>
-                //                         <p>
-                //                             <strong>Project:</strong> ${env.JOB_NAME}<br/>
-                //                             <strong>Branch:</strong> ${params.BRANCH}<br/>
-                //                             <strong>Commit:</strong> ${env.COMMIT_SHA}
-                //                         </p>
-                //                         <p>
-                //                             For detailed insights, please open the attached PDF report.
-                //                         </p>
-                //                         <p>
-                //                             Regards,<br/>
-                //                             <strong>Jenkins CI/CD</strong> 🤖
-                //                         </p>
-                //                     </body>
-                //                     </html>
-                //             """,
-                //         mimeType: 'text/html',
-                //         attachmentsPattern: 'ai_report.pdf',
-                //         to: 'naveenramlu@gmail.com',
-                //         attachLog: false
-                //     )
-                // }
             }
         }
     }
