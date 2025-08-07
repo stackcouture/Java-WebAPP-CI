@@ -98,15 +98,63 @@ def call(String projectName, String gitSha, String buildNumber, String trivyHtml
                 <meta charset="UTF-8">
                 <title>Security Report - Build Summary</title>
                 <style>
-                    body { font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 40px; }
-                    h1, h2 { color: #2c3e50; }
-                    .section { margin-bottom: 25px; }
-                    ul { margin-top: 0; padding-left: 20px; }
-                    .highlight { background: #f9f9f9; padding: 10px; border-left: 5px solid #2c3e50; white-space: pre-wrap; word-wrap: break-word; }
-                    .badge-ok { color: green; font-weight: bold; }
-                    .badge-fail { color: red; font-weight: bold; }
-                    a { color: #2c3e50; text-decoration: underline; }
-                    footer { margin-top: 40px; font-size: 0.9em; color: #888; }
+                    body {
+                        font-family: Arial, sans-serif;
+                        background-color: #fff;
+                        margin: 20px;
+                        line-height: 1.4;
+                        font-size: 14px;
+                    }
+
+                    h1, h2 {
+                        color: #2c3e50;
+                        margin-bottom: 10px;
+                    }
+
+                    .section {
+                        margin-bottom: 20px;
+                    }
+
+                    ul {
+                        margin: 0;
+                        padding-left: 18px;
+                    }
+
+                    .highlight {
+                        background: #f5f5f5;
+                        padding: 12px;
+                        border-left: 4px solid #2c3e50;
+                        white-space: pre-wrap;
+                        word-wrap: break-word;
+                        font-family: monospace;
+                        font-size: 13px;
+                    }
+
+                    .badge-ok {
+                        color: green;
+                        font-weight: bold;
+                    }
+
+                    .badge-fail {
+                        color: red;
+                        font-weight: bold;
+                    }
+
+                    a {
+                        color: #2c3e50;
+                        text-decoration: underline;
+                    }
+
+                    footer {
+                        margin-top: 30px;
+                        font-size: 12px;
+                        color: #888;
+                    }
+
+                    img {
+                        max-height: 60px;
+                        margin-bottom: 20px;
+                    }
                 </style>
             </head>
             <body>
