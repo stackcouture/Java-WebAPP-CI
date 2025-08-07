@@ -1,10 +1,5 @@
 import groovy.json.JsonOutput
 
-// Define the custom checkout function outside of the pipeline block
-def checkoutGit(String gitUrl, String gitBranch) {
-   
-}
-
 pipeline {
     agent {
         label "jenkins-agent"
@@ -36,11 +31,12 @@ pipeline {
       stage('Checkout Code') {
             steps {
                 script {
-                    def gitBranch = ${params.BRANCH}
+                    def gitBranch = params.BRANCH
                     def gitUrl = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
+
                     checkout([
                         $class: 'GitSCM',
-                        branches: [[name: gitBranch]],
+                        branches: [[name: "*/${gitBranch}"]],
                         userRemoteConfigs: [
                             [url: gitUrl, credentialsId: 'github-pat']
                         ]
@@ -54,7 +50,6 @@ pipeline {
                 script {
                     // Get commit SHA
                     env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                    echo "Commit SHA: ${env.COMMIT_SHA}"
                 }
             }
         }
