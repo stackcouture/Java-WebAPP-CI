@@ -3,11 +3,18 @@ import groovy.json.JsonOutput
 def checkoutGit(String gitUrl, String gitBranch) {
     checkout([
         $class: 'GitSCM',
-        branches: [[name: gitBranch]],
+        branches: [[name: "*/${gitBranch}"]],
         userRemoteConfigs: [
             [url: gitUrl, credentialsId: 'github-pat']
         ]
     ])
+    // checkout([
+    //     $class: 'GitSCM',
+    //     branches: [[name: gitBranch]],
+    //     userRemoteConfigs: [
+    //         [url: gitUrl, credentialsId: 'github-pat']
+    //     ]
+    // ])
 }
 
 pipeline {
@@ -45,13 +52,7 @@ pipeline {
                     def gitUrl = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
 
                     checkoutGit(gitBranch, gitUrl) 
-                    // checkout([
-                    //     $class: 'GitSCM',
-                    //     branches: [[name: "*/${gitBranch}"]],
-                    //     userRemoteConfigs: [
-                    //         [url: gitUrl, credentialsId: 'github-pat']
-                    //     ]
-                    // ])
+                    
                 }
             }
         }
