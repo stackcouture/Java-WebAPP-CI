@@ -197,11 +197,22 @@ pipeline {
 
                 if (fileExists('target/surefire-reports')) {
                     junit 'target/surefire-reports/*.xml'
+                } else {
+                    echo "No test results found."
                 }
 
-                publishHTML([
+                if (fileExists('target/test-report.html')) {
+                    publishHTML([
+                        reportName: 'Test Report',
+                        reportDir: 'target',
                         reportFiles: 'target/**.html',
-                ])
+                        keepAll: true,
+                        alwaysLinkToLastBuild: true,
+                        allowMissing: true
+                    ])
+                } else {
+                    echo "No HTML test report found to publish."
+                }
             }
         }
 
