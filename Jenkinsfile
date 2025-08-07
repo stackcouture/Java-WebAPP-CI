@@ -1,6 +1,4 @@
 import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
-import java.net.URLEncoder
 
 pipeline {
     agent {
@@ -21,7 +19,6 @@ pipeline {
         OPENAI_API_KEY = credentials('openai-api-key') 
         PDF_REPORT = 'ai_report.pdf'
         SONAR_TOKEN = credentials('sonar-token')
-        DEP_TRACK_API_KEY = credentials('dependency-track-api-key')
     }
 
     tools {
@@ -90,11 +87,146 @@ pipeline {
             }
         }
 
+
+        // stage('Publish SBOM') {
+        //     steps {
+        //         script {
+        //             def sbomFile = 'target/bom.xml'
+        //             if (fileExists(sbomFile)) {
+        //                 archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+        //                 echo "SBOM archived: ${sbomFile}"
+        //             }
+        //             else {
+        //                 error "SBOM not found: ${sbomFile}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage('Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+        //             script {
+        //                 def sbomFile = 'target/bom.xml'
+        //                 if (!fileExists(sbomFile)) {
+        //                     error "❌ SBOM file not found: ${sbomFile}"
+        //                 }
+
+        //                 def projectName = "${params.ECR_REPO_NAME}"
+        //                 def projectVersion = "${env.COMMIT_SHA}"
+        //                 def dependencyTrackUrl = 'http://13.201.191.212:8081//api/v1/bom'
+
+        //                 echo "🔐 Uploading SBOM for ${projectName}:${projectVersion}"
+
+        //                 withEnv([
+        //                     "DEPTRACK_URL=${dependencyTrackUrl}",
+        //                     "PROJECT_NAME=${projectName}",
+        //                     "PROJECT_VERSION=${projectVersion}"
+        //                 ]) {
+        //                     sh '''#!/bin/bash
+        //                         curl -X POST "$DEPTRACK_URL" \
+        //                             -H "X-Api-Key: $DT_API_KEY" \
+        //                             -H "Content-Type: multipart/form-data" \
+        //                             -F "autoCreate=true" \
+        //                             -F "projectName=$PROJECT_NAME" \
+        //                             -F "projectVersion=$PROJECT_VERSION" \
+        //                             -F "bom=@target/bom.xml"
+        //                     '''
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        stage('Prepare Trivy Template') {
+            steps {
+                sh """
+                    mkdir -p contrib
+                    curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+                """
+            }
+        }
+
+        stage('Trivy File System Scan') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    try {
+                        runTrivyScanUnified("filesystem-scan",".", "fs")
+                    } catch (err) {
+                        echo "Trivy File System Scan failed: ${err}"
+                    }
+                }
+            }
+        }
+    
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonar-server') {
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=Java-App \
+                                -Dsonar.java.binaries=target/classes \
+                                -Dsonar.sources=src/main/java,src/test/java \
+                                -Dsonar.exclusions=**/*.js
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gates') {
+            steps {
+                script {
+                    timeout(time: 5, unit: 'MINUTES') {
+                            def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: 'sonar-token' 
+                            if (qualityGate.status != 'OK') {
+                                error "SonarQube Quality Gate failed: ${qualityGate.status}"
+                            }   
+                            else {
+                                echo "SonarQube Quality Gate passed: ${qualityGate.status}"
+                            }
+                        }
+                    }	
+                }
+        }
+
         stage('Build Docker Image') {
             steps {
                 sh "docker build -t ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} ."
             }
         }
+
+        // stage('Security Scans Before Push') {
+        //     parallel {
+        //         stage('Trivy Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runTrivyScanUnified("before-push", localTag, "image")
+        //                 }
+        //             }
+        //         }
+        //         stage('Snyk Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runSnykScan("before-push", localTag)
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Docker Push') {
             steps {
@@ -117,6 +249,35 @@ pipeline {
                 }
             }
         }
+
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                     options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runTrivyScanUnified("after-push", pushedTag, "image")
+                        }
+                    }
+                }
+                stage('Snyk After Push') {
+                     options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            retry(2) {
+                                runSnykScan("after-push", pushedTag)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         stage('Cleanup Local Image Tags') {
             steps {
@@ -130,11 +291,26 @@ pipeline {
         stage('Generate GPT Report') {
             steps {
                 script {
+
+                    def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+                    def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+
+                    // Check if necessary environment variables are set
+                    if (!env.COMMIT_SHA || !env.BUILD_NUMBER) {
+                        error("Environment variables COMMIT_SHA or BUILD_NUMBER are not set.")
+                    }
+
+                    if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
                         runGptSecuritySummary(
                             "my-app", 
                             env.COMMIT_SHA, 
-                            env.BUILD_NUMBER
+                            env.BUILD_NUMBER, 
+                            trivyHtmlPath, 
+                            snykJsonPath
                         )
+                    } else {
+                        error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
+                    }
                 }   
             } 
         } 
@@ -142,7 +318,7 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: '**/fs.html', allowEmptyArchive: true
+            archiveArtifacts artifacts: '**/fs.html, **/trivy-image-scan-*.html, **/snyk-report-*.json', allowEmptyArchive: true
             script {
                 if (fileExists('target/surefire-reports')) {
                     junit 'target/surefire-reports/*.xml'
@@ -215,6 +391,68 @@ pipeline {
     }
 }
 
+def runSnykScan(stageName, imageTag) {
+    def reportDir = "reports/snyk/${env.BUILD_NUMBER}/${stageName}"
+    def jsonFile = "${reportDir}/snyk-report-${env.COMMIT_SHA}.json"
+    def htmlFile = "${reportDir}/snyk-report-${env.COMMIT_SHA}.html"
+
+    withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
+        sh """
+            mkdir -p ${reportDir}
+
+            snyk auth $SNYK_TOKEN
+            snyk container test ${imageTag} --severity-threshold=high --exclude-base-image-vulns --json > ${jsonFile} || true
+
+            echo "<html><body><pre>" > ${htmlFile}
+            if [ -s ${jsonFile} ]; then
+                cat ${jsonFile} | jq . >> ${htmlFile}
+            else
+                echo "Snyk scan failed or returned no data. Please check Jenkins logs or retry." >> ${htmlFile}
+            fi
+            echo "</pre></body></html>" >> ${htmlFile}
+        """
+    }
+
+    publishHTML(target: [
+        allowMissing: true,
+        alwaysLinkToLastBuild: true,
+        keepAll: true,
+        reportDir: reportDir,
+        reportFiles: htmlFile.replace("${reportDir}/", ""),
+        reportName: "Snyk Image Scan (${stageName}) - Build ${env.BUILD_NUMBER}"
+    ])
+    archiveArtifacts artifacts: "${jsonFile},${htmlFile}", allowEmptyArchive: true
+}
+
+def runTrivyScanUnified(stageName, scanTarget, scanType) {
+    def reportDir = "reports/trivy/${env.BUILD_NUMBER}/${stageName}"
+    def htmlReport = scanType == 'fs' 
+        ? "${reportDir}/trivy-fs-scan-${env.COMMIT_SHA}.html"
+        : "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.html"
+
+    def jsonReport = scanType == 'fs' 
+        ? "${reportDir}/trivy-fs-scan-${env.COMMIT_SHA}.json"
+        : "${reportDir}/trivy-image-scan-${env.COMMIT_SHA}.json"
+
+    sh """
+        mkdir -p ${reportDir}
+        trivy ${scanType} --format template --template "@contrib/html.tpl" -o ${htmlReport} ${scanTarget}
+        trivy ${scanType} --format json -o ${jsonReport} ${scanTarget}
+    """
+
+    publishHTML(target: [
+        allowMissing: true,
+        alwaysLinkToLastBuild: true,
+        keepAll: true,
+        reportDir: reportDir,
+        reportFiles: "*.html",
+        reportName: "Trivy ${scanType == 'fs' ? 'File System' : 'Image'} Scan (${stageName}) - Build ${env.BUILD_NUMBER}"
+    ])
+
+    archiveArtifacts artifacts: "${reportDir}/*.html,${reportDir}/*.json", allowEmptyArchive: true
+}
+
+
 def sendSlackNotification(String status, String color) {
     def emojiMap = [
         SUCCESS : "✅ Deployment Successful!",
@@ -242,33 +480,31 @@ def sendSlackNotification(String status, String color) {
     }
 }
 
-def runGptSecuritySummary(String projectName, String gitSha, String buildNumber) {
+def runGptSecuritySummary(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
+    def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
+    def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
+    def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
 
-    // def dtJsonPath = getDependencyTrackFindings()
-    // def findings = readJSON file: dtJsonPath
-    // def dtSummary = extractTopVulnsFromDt(findings.findings)
-
-    def findingsJson = getDependencyTrackFindings()
-
-    if (!findingsJson || !findingsJson.findings) {
-        echo "⚠️ No findings retrieved from Dependency-Track"
-        findingsJson = [findings: []]
-    }
-
-    def dtSummary = extractTopVulnsFromDt(findingsJson.findings)
-    
-    def dtLower = dtSummary.toLowerCase()
-    def dtStatus = (
-        dtLower.contains("no high") &&
-        dtLower.contains("no critical")
+    def trivyStatus = (
+        trivySummary.toLowerCase().contains("no high") ||
+        trivySummary.toLowerCase().contains("no critical")
     ) ? "OK" : "Issues Found"
 
-    if (!dtSummary?.trim()) {
-        dtSummary = "No high or critical vulnerabilities found by Dependency-Track."
-        dtStatus = "OK"
+    def snykLower = snykSummary.toLowerCase()
+    def snykStatus = (
+        snykLower.contains("no high") &&
+        snykLower.contains("no critical") &&
+        snykLower.contains("no medium")
+    ) ? "OK" : "Issues Found"
+
+    if (!snykSummary?.trim()) {
+        snykSummary = "No high or critical vulnerabilities found by Snyk."
+        snykStatus = "OK"
     }
 
-    echo "Dependency-Track Summary:\n${dtSummary}"
+    def sonarSummary = getSonarQubeSummary()
+    def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
+    def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
     def prompt = """
     You are a security analyst assistant.
@@ -277,7 +513,8 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber)
 
     Include these sections:
     - Project Overview (project name, SHA, build number)
-    - **Dependency-Track Findings (MUST be shown if present)*
+    - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
+    - Code Smells Summary
     - License Issues (e.g., GPL, AGPL, LGPL)
     - Recommendations (2–4 practical points)
     - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
@@ -288,11 +525,22 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber)
     Build Number: ${buildNumber}
 
     Scan Status Summary:
-    - Dependency-Track: ${dtStatus}
+    - Trivy: ${trivyStatus}
+    - Snyk: ${snykStatus}
+    - SonarQube: ${sonarSummary.qualityGateSummary}
 
-    --- Dependency-Track Top Issues ---
-    ${dtSummary}
+    --- Trivy Top Issues ---
+    ${trivySummary}
 
+    --- Snyk Top Issues ---
+    ${snykSummary}
+
+    --- SonarQube Issues ---
+    Code Smells:
+    ${sonarCodeSmellsSummary}
+
+    Vulnerabilities:
+    ${sonarVulnerabilitiesSummary}
     """
 
     def gptPromptFile = "openai_prompt.json"
@@ -379,6 +627,47 @@ def runGptSecuritySummary(String projectName, String gitSha, String buildNumber)
     }
 }
 
+
+def formatSonarQubeIssues(issues) {
+    return issues.collect { issue ->
+        "<li><strong>${issue.severity}:</strong> ${issue.message} | <strong>Component:</strong> ${issue.component}</li>"
+    }.join("\n")
+}
+
+def extractTopVulns(String jsonPath, String toolName) {
+    if (!fileExists(jsonPath) || readFile(jsonPath).trim().isEmpty()) {
+        return "${toolName} JSON file not found or is empty."
+    }
+
+   if (toolName == "Snyk") {
+        return sh(
+            script: """#!/bin/bash
+                jq -r '
+                    .vulnerabilities? // [] |
+                    map(select(.severity == "high" or .severity == "critical" or .severity == "medium")) |
+                    sort_by(.severity)[:5][] |
+                    "* ID: \\(.id) | Title: \\(.title) [\\(.severity)] in \\(.name)"
+                ' ${jsonPath} || echo "No high, critical or medium issues found in ${toolName}."
+            """,
+            returnStdout: true
+        ).trim()
+    } else if (toolName == "Trivy") {
+        return sh(
+            script: """#!/bin/bash
+                jq -r '
+                    .Results[]?.Vulnerabilities? // [] |
+                    map(select(.Severity == "HIGH" or .Severity == "CRITICAL")) |
+                    sort_by(.Severity)[:5][] |
+                    "* ID: \\(.VulnerabilityID) | Title: \\(.Title) [\\(.Severity)] in \\(.PkgName)"
+                ' ${jsonPath} || echo "No high or critical issues found in ${toolName}."
+            """,
+            returnStdout: true
+        ).trim()
+    } else {
+        return "Unsupported tool: ${toolName}"
+    }
+}
+
 def parseStatusBadge(String gptContent) {
     echo "Raw GPT content for badge parsing:\n${gptContent}"
     def matcher = gptContent =~ /(?i)<strong>Status:<\/strong>\s*(OK|Issues Found)/
@@ -388,91 +677,97 @@ def parseStatusBadge(String gptContent) {
     return [statusText, badgeColor, badgeClass]
 }
 
-def getDependencyTrackFindings() {
-    def projectName = params.ECR_REPO_NAME
-    def projectVersion = env.COMMIT_SHA
-    def dtrackHost = 'http://13.201.191.212:8081'
-    def dtrackToken = env.DEP_TRACK_API_KEY
+def getSonarQubeSummary() {
+    def projectKey = "Java-App" 
+    def sonarHost = "http://65.2.168.142:9000"
+    def sonarToken = env.SONAR_TOKEN
+    def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
+    def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
-    echo "Getting Dependency-Track findings for ${projectName}:${projectVersion}"
+    def qualityGateJson = null
+    def issuesJson = null
 
-    // Step 1: Get project UUID
-    def projectUrl = "${dtrackHost}/api/v1/project?name=${projectName}&version=${projectVersion}"
-    def projectJson = sh(
-        script: """
-            curl -s -X GET "${projectUrl}" \\
-            -H "X-Api-Key: ${dtrackToken}" \\
-            -H "Content-Type: application/json"
-        """,
-        returnStdout: true
-    ).trim()
+    try {
+        def qualityGateResponse = sh(
+            script: "curl -sf -u ${sonarToken}: ${apiQualityGateUrl}",
+            returnStdout: true
+        ).trim()
 
-    def projectList = readJSON text: projectJson
+        if (!qualityGateResponse) {
+            echo "Empty response from SonarQube Quality Gate API: ${apiQualityGateUrl}"
+            return getSonarFallbackResult()
+        }
 
-    if (projectList.size() == 0) {
-        error "No Dependency-Track project found for ${projectName}:${projectVersion}"
+        qualityGateJson = readJSON text: qualityGateResponse
+
+    } catch (Exception e) {
+        echo "Error fetching or parsing SonarQube Quality Gate response: ${e.message}"
+        return getSonarFallbackResult()
     }
 
-    def projectUuid = projectList[0].uuid
-    echo "Found project UUID: ${projectUuid}"
+    try {
+        def issuesResponse = sh(
+            script: "curl -sf -u ${sonarToken}: ${apiIssuesUrl}",
+            returnStdout: true
+        ).trim()
 
-    // Step 2: Get findings
-    def findingsUrl = "${dtrackHost}/api/v1/project/${projectUuid}"
-    def findingsJson = sh(
-        script: """
-            curl -s -X GET "${findingsUrl}" \\
-            -H "X-Api-Key: ${dtrackToken}" \\
-            -H "Content-Type: application/json"
-        """,
-        returnStdout: true
-    ).trim()
+        if (!issuesResponse) {
+            echo "Empty response from SonarQube Issues API: ${apiIssuesUrl}"
+            return getSonarFallbackResult()
+        }
 
-    writeFile file: "dependency-track-findings.json", text: findingsJson
-    echo "Dependency-Track findings saved to dependency-track-findings.json"
+        issuesJson = readJSON text: issuesResponse
 
-    return findingsJson
+    } catch (Exception e) {
+        echo "Error fetching or parsing SonarQube Issues response: ${e.message}"
+        return getSonarFallbackResult()
+    }
+
+    def issues = issuesJson.issues ?: []
+
+    def codeSmells = issues.findAll { it.type == 'CODE_SMELL' }.collect {
+        [
+            severity: it.severity,
+            message: it.message
+        ]
+    }
+
+    def vulnerabilities = issues.findAll { it.type == 'VULNERABILITY' }.collect {
+        [
+            severity: it.severity,
+            message: it.message
+        ]
+    }
+
+    def sonarCodeSmellsSummary = codeSmells.collect {
+        "Severity: ${it.severity}, Message: ${it.message}"
+    }.join("\n")
+
+    def sonarVulnerabilitiesSummary = vulnerabilities.collect {
+        "Severity: ${it.severity}, Message: ${it.message}"
+    }.join("\n")
+
+    def qualityGateStatus = qualityGateJson?.projectStatus?.status ?: "UNKNOWN"
+    def qualityGateSummary = "Quality Gate Status: ${qualityGateStatus}"
+
+    return [
+        codeSmells: codeSmells,
+        vulnerabilities: vulnerabilities,
+        qualityGateSummary: qualityGateSummary,
+        qualityGateStatus: qualityGateStatus,
+        sonarCodeSmellsSummary: sonarCodeSmellsSummary,
+        sonarVulnerabilitiesSummary: sonarVulnerabilitiesSummary
+    ]
 }
 
-
-def extractTopVulnsFromDt(List findings) {
-    if (!(findings instanceof List) || findings.isEmpty()) {
-        return "<h2>Dependency-Track Summary</h2><p>No vulnerabilities found by Dependency-Track.</p>"
-    }
-
-    // Only keep CRITICAL and HIGH severity findings
-    def topFindings = findings.findAll { f ->
-        try {
-            f instanceof Map &&
-            f?.severity instanceof String &&
-            f.severity?.toUpperCase() in ["CRITICAL", "HIGH"]
-        } catch (Exception ignored) {
-            return false
-        }
-    }
-
-    if (topFindings.isEmpty()) {
-        return "<h2>Dependency-Track Summary</h2><p>No high or critical vulnerabilities found by Dependency-Track.</p>"
-    }
-
-    def grouped = topFindings.groupBy { it.severity.toUpperCase() }
-    def report = new StringBuilder("<h2>Dependency-Track Summary</h2>")
-
-    ["CRITICAL", "HIGH"].each { severity ->
-        def items = grouped[severity]
-        if (items) {
-            report.append("<h3>${severity} Issues (${items.size()}):</h3><ul>")
-            items.take(5).each { f ->
-                def title = (f?.title instanceof String) ? f.title : "No Title"
-                def cwe = f?.cweId ? "CWE-${f.cweId}" : "No CWE"
-                def score = (f?.cvssV3Score instanceof Number) ? String.format('%.1f', f.cvssV3Score) : "N/A"
-                report.append("<li><strong>${title}</strong> — ${cwe}, CVSS: ${score}</li>")
-            }
-            if (items.size() > 5) {
-                report.append("<li><em>...and ${items.size() - 5} more</em></li>")
-            }
-            report.append("</ul>")
-        }
-    }
-
-    return report.toString()
+// Fallback result if API fails
+def getSonarFallbackResult() {
+    return [
+        codeSmells: [],
+        vulnerabilities: [],
+        qualityGateSummary: "SonarQube analysis failed or returned no data.",
+        qualityGateStatus: "ERROR",
+        sonarCodeSmellsSummary: "No code smells data available.",
+        sonarVulnerabilitiesSummary: "No vulnerability data available."
+    ]
 }
