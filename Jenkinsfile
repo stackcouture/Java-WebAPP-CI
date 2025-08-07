@@ -1019,34 +1019,53 @@ def getDependencyTrackFindings() {
 // }
 
 def extractTopVulnsFromDt(List findings) {
-    if (!findings || findings.isEmpty()) {
-        return "Dependency-Track Summary:\nNo vulnerabilities found by Dependency-Track."
+    if (!(findings instanceof List) || findings.isEmpty()) {
+        return "<h2>Dependency-Track Summary</h2><p>No vulnerabilities found by Dependency-Track.</p>"
     }
 
+    // Defensive filtering
     def topFindings = findings.findAll { f ->
-        f.severity?.toUpperCase() in ["CRITICAL", "HIGH", "MEDIUM"]
+        try {
+            f instanceof Map &&
+            f?.severity instanceof String &&
+            f.severity?.toUpperCase() in ["CRITICAL", "HIGH", "MEDIUM"]
+        } catch (Exception ignored) {
+            return false
+        }
     }
 
     if (topFindings.isEmpty()) {
-        return "Dependency-Track Summary:\nNo high or critical vulnerabilities found by Dependency-Track."
+        return "<h2>Dependency-Track Summary</h2><p>No high, critical, or medium vulnerabilities found by Dependency-Track.</p>"
     }
 
-    def grouped = topFindings.groupBy { it.severity?.toUpperCase() }
-    def report = new StringBuilder("Dependency-Track Summary:\n")
+    // Ensure we only group valid entries
+    def grouped = topFindings.findAll { it?.severity }.groupBy { it.severity.toUpperCase() }
+    def report = new StringBuilder("<h2>Dependency-Track Summary</h2>")
 
     ["CRITICAL", "HIGH", "MEDIUM"].each { severity ->
         def items = grouped[severity]
         if (items) {
-            report.append("\n<strong>${severity} Issues:</strong>\n<ul>")
+            report.append("<h3>${severity} Issues (${items.size()}):</h3><ul>")
+
             items.take(5).each { f ->
-                report.append("<li>${f.title} - ${f.cweId ?: 'No CWE'} - ${f.cvssV3Score ?: 'N/A'}</li>")
+                def title = (f?.title instanceof String) ? f.title : "No Title"
+                def cwe = f?.cweId ? "CWE-${f.cweId}" : "No CWE"
+                def score = (f?.cvssV3Score instanceof Number) ? String.format('%.1f', f.cvssV3Score) : "N/A"
+                report.append("<li><strong>${title}</strong> — ${cwe}, CVSS: ${score}</li>")
             }
+
+            if (items.size() > 5) {
+                report.append("<li><em>...and ${items.size() - 5} more</em></li>")
+            }
+
             report.append("</ul>")
         }
     }
 
     return report.toString()
 }
+
+
 
 def generatePlainTextFromFindings(List findings) {
     return findings.collect {
