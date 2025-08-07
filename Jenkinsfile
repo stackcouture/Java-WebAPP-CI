@@ -1,15 +1,16 @@
 import groovy.json.JsonOutput
 
-def checkoutGit(String gitBranch, String gitUrl) {
-    checkout([
-        $class: 'GitSCM',
-        branches: [[name: "*/${gitBranch}"]],
-        userRemoteConfigs: [
-            [url: gitUrl, credentialsId: 'github-pat']
-        ]
-    ])
-}
-@Library('my-shared-library')
+// def checkoutGit(String gitBranch, String gitUrl) {
+//     checkout([
+//         $class: 'GitSCM',
+//         branches: [[name: "*/${gitBranch}"]],
+//         userRemoteConfigs: [
+//             [url: gitUrl, credentialsId: 'github-pat']
+//         ]
+//     ])
+// }
+
+@Library('my-shared-library') _
 
 pipeline {
     agent {
