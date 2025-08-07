@@ -1,15 +1,5 @@
 import groovy.json.JsonOutput
 
-// def checkoutGit(String gitBranch, String gitUrl) {
-//     checkout([
-//         $class: 'GitSCM',
-//         branches: [[name: "*/${gitBranch}"]],
-//         userRemoteConfigs: [
-//             [url: gitUrl, credentialsId: 'github-pat']
-//         ]
-//     ])
-// }
-
 @Library('my-shared-library') _
 
 pipeline {
@@ -25,6 +15,7 @@ pipeline {
 
     environment {
         REGION = 'ap-south-1'
+        GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
     }
 
     tools {
@@ -36,7 +27,6 @@ pipeline {
 
         stage('Clean Workspace') {
             steps {
-                //cleanWs()
                 cleanWorkspace()
             }
         }
@@ -44,11 +34,7 @@ pipeline {
       stage('Checkout Code') {
             steps {
                 script {
-                    def gitBranch = params.BRANCH
-                    def gitUrl = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
-
-                    checkoutGit(gitBranch, gitUrl) 
-                    
+                    checkoutGit(params.BRANCH, env.GIT_URL) 
                 }
             }
         }
@@ -56,7 +42,6 @@ pipeline {
         stage('Commit SHA') {
             steps {
                 script {
-                    // Get commit SHA
                     env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                 }
             }
