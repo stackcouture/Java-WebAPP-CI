@@ -1,5 +1,6 @@
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import java.net.URLEncoder
 
 pipeline {
     agent {
@@ -936,12 +937,11 @@ def getSonarFallbackResult() {
     ]
 }
 
-
 def getDependencyTrackFindings() {
-    def projectName = "${params.ECR_REPO_NAME}"
-    def projectVersion = "${env.COMMIT_SHA}"
+    def projectName = params.ECR_REPO_NAME
+    def projectVersion = env.COMMIT_SHA
     def dtrackHost = 'http://13.201.191.212:8081'
-    def dtrackToken = "${env.DEP_TRACK_API_KEY}"
+    def dtrackToken = env.DEP_TRACK_API_KEY
 
     def encodedName = URLEncoder.encode(projectName, "UTF-8")
     def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
@@ -950,45 +950,109 @@ def getDependencyTrackFindings() {
     def findingsJson = ''
 
     script {
-        // 🔹 Step 1: Get project by name and version
-        def projectJson = sh(
-            script: """
-                curl -s -H "X-Api-Key: ${dtrackToken}" \
-                "${dtrackHost}/api/v1/project/lookup?name=${encodedName}&version=${encodedVersion}"
-            """,
-            returnStdout: true
-        ).trim()
+        echo "🔍 Looking up Dependency-Track project: ${projectName}:${projectVersion}"
 
-        if (!projectJson || projectJson.contains("Not Found") || projectJson.startsWith("<html")) {
-            error "❌ Project not found in Dependency-Track for ${projectName}:${projectVersion}"
+        withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+            def lookupResponse = sh(
+                script: """
+                    curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+                    "${dtrackHost}/api/v1/project/lookup?name=${encodedName}&version=${encodedVersion}"
+                """,
+                returnStdout: true
+            ).trim()
+
+            if (!lookupResponse || lookupResponse.contains("Not Found") || lookupResponse.startsWith("<html")) {
+                error "❌ Project not found in Dependency-Track for ${projectName}:${projectVersion}"
+            }
+
+            def projectInfo = new JsonSlurper().parseText(lookupResponse)
+            projectUuid = projectInfo.uuid
+
+            if (!projectUuid) {
+                error "❌ UUID not found in Dependency-Track response for project ${projectName}"
+            }
+
+            echo "✅ Found project UUID: ${projectUuid}"
         }
-
-        def projectInfo = new JsonSlurper().parseText(projectJson)
-        projectUuid = projectInfo.uuid
-
-        echo "✅ Found project UUID: ${projectUuid}"
     }
 
     script {
-        // 🔹 Step 2: Get findings for project UUID
-        findingsJson = sh(
-            script: """
-                curl -s -H "X-Api-Key: ${dtrackToken}" \
-                "${dtrackHost}/api/v1/finding/project/${projectUuid}"
-            """,
-            returnStdout: true
-        ).trim()
+        echo "📥 Fetching findings for project UUID: ${projectUuid}"
 
-        if (!findingsJson.startsWith("[")) {
-            error "❌ Invalid findings JSON: ${findingsJson.take(200)}"
+        withEnv(["DTRACK_TOKEN=${dtrackToken}"]) {
+            findingsJson = sh(
+                script: """
+                    curl -s -H "X-Api-Key: \$DTRACK_TOKEN" \
+                    "${dtrackHost}/api/v1/finding/project/${projectUuid}"
+                """,
+                returnStdout: true
+            ).trim()
+
+            if (!findingsJson || !findingsJson.startsWith("[")) {
+                error "❌ Invalid findings JSON from Dependency-Track: ${findingsJson.take(200)}"
+            }
+
+            writeFile file: 'dependency-track-findings.json', text: findingsJson
+            echo "✅ Findings written to dependency-track-findings.json"
         }
-
-        writeFile file: 'dependency-track-findings.json', text: findingsJson
-        echo "✅ Findings written to dependency-track-findings.json"
     }
 
     return 'dependency-track-findings.json'
 }
+
+
+// def getDependencyTrackFindings() {
+//     def projectName = "${params.ECR_REPO_NAME}"
+//     def projectVersion = "${env.COMMIT_SHA}"
+//     def dtrackHost = 'http://13.201.191.212:8081'
+//     def dtrackToken = "${env.DEP_TRACK_API_KEY}"
+
+//     def encodedName = URLEncoder.encode(projectName, "UTF-8")
+//     def encodedVersion = URLEncoder.encode(projectVersion, "UTF-8")
+
+//     def projectUuid = ''
+//     def findingsJson = ''
+
+//     script {
+//         // 🔹 Step 1: Get project by name and version
+//         def projectJson = sh(
+//             script: """
+//                 curl -s -H "X-Api-Key: ${dtrackToken}" \
+//                 "${dtrackHost}/api/v1/project/lookup?name=${encodedName}&version=${encodedVersion}"
+//             """,
+//             returnStdout: true
+//         ).trim()
+
+//         if (!projectJson || projectJson.contains("Not Found") || projectJson.startsWith("<html")) {
+//             error "❌ Project not found in Dependency-Track for ${projectName}:${projectVersion}"
+//         }
+
+//         def projectInfo = new JsonSlurper().parseText(projectJson)
+//         projectUuid = projectInfo.uuid
+
+//         echo "✅ Found project UUID: ${projectUuid}"
+//     }
+
+//     script {
+//         // 🔹 Step 2: Get findings for project UUID
+//         findingsJson = sh(
+//             script: """
+//                 curl -s -H "X-Api-Key: ${dtrackToken}" \
+//                 "${dtrackHost}/api/v1/finding/project/${projectUuid}"
+//             """,
+//             returnStdout: true
+//         ).trim()
+
+//         if (!findingsJson.startsWith("[")) {
+//             error "❌ Invalid findings JSON: ${findingsJson.take(200)}"
+//         }
+
+//         writeFile file: 'dependency-track-findings.json', text: findingsJson
+//         echo "✅ Findings written to dependency-track-findings.json"
+//     }
+
+//     return 'dependency-track-findings.json'
+// }
 
 // def getDependencyTrackFindings() {
 //     def projectName = "${params.ECR_REPO_NAME}"
