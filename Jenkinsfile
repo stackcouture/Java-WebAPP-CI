@@ -116,7 +116,7 @@ pipeline {
         stage('Docker Push') {
             steps {
                 script {
-                    dockerPush("docker-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", params.ECR_REPO_NAME, params.AWS_ACCOUNT_ID, params.REGION)
+                    dockerPush("docker-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", params.ECR_REPO_NAME, params.AWS_ACCOUNT_ID, "${env.REGION}")
                 }
             }
         }
