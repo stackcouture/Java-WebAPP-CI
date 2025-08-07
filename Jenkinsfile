@@ -199,13 +199,16 @@ pipeline {
                     echo "No test results found."
                 }
 
-                // Check if HTML report exists before publishing
-                def htmlReportExists = fileExists('target/**.html')
+                 sh "ls -R target/"
+
+                def htmlReportExists = fileExists('target/surefire-reports/surefire-report.html') 
+                echo "HTML report exists: ${htmlReportExists}"
+                
                 if (htmlReportExists) {
-                    // Publish HTML reports only if they exist
                     publishHTML(target: [
                         reportName: 'Test Report',
-                        reportFiles: 'target/**.html',
+                        reportFiles: 'target/surefire-reports/surefire-report.html',
+                        //reportFiles: 'target/**.html',
                         reportTitles: 'Test Report'
                     ])
                 } else {
