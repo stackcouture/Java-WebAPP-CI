@@ -31,7 +31,7 @@ pipeline {
             }
         }
 
-      stage('Checkout Code') {
+        stage('Checkout Code') {
             steps {
                 script {
                     checkoutGit(params.BRANCH, env.GIT_URL) 
@@ -50,6 +50,30 @@ pipeline {
         stage('Build + Test + SBOM') {
             steps {
                 sh 'mvn clean verify'
+            }
+        }
+
+         stage('Prepare Trivy Template') {
+            steps {
+                sh """
+                    mkdir -p contrib
+                    curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+                """
+            }
+        }
+
+        stage('Trivy File System Scan') {
+            options {
+                timeout(time: 10, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    try {
+                        runTrivyScanUnified("filesystem-scan",".", "fs")
+                    } catch (err) {
+                        echo "Trivy File System Scan failed: ${err}"
+                    }
+                }
             }
         }
     }
