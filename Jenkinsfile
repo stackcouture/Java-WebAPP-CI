@@ -79,6 +79,32 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    sonarScan(
+                        projectKey: 'Java-App',
+                        sources: 'src/main/java,src/test/java',
+                        binaries: 'target/classes',
+                        exclusions: '**/*.js',
+                        scannerTool: 'sonar-scanner',
+                        sonarEnv: 'sonar-server'
+                    )
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    sonarQualityGateCheck(
+                        qualityGateToken: 'sonar-token',
+                        timeoutMinutes: 5
+                    )
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                  script {
