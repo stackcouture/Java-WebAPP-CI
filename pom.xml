@@ -83,6 +83,10 @@
               <goal>makeAggregateBom</goal> 
             </goals>
             <phase>verify</phase>
+            <configuration>
+              <outputFormat>all</outputFormat> <!-- output both XML and JSON -->
+              <outputName>bom</outputName> <!-- base filename -->
+            </configuration>
           </execution>
         </executions>
       </plugin>
