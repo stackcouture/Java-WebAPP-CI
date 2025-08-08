@@ -30,7 +30,7 @@ def sendReportEmail(String branch, String commitSha, String toEmail) {
                         Please find attached the <strong>AI-generated security report</strong> for <strong>Build #${env.BUILD_NUMBER}</strong>.
                     </p>
                     <p>
-                        This report summarizes security scan results from <strong>Trivy</strong> and <strong>Snyk</strong>.
+                        This report summarizes security scan results from <strong>Trivy</strong>, <strong>Snyk</strong> and <strong>SonarQube</strong>.
                     </p>
                     <p>
                         <strong>Project:</strong> ${env.JOB_NAME}<br/>
