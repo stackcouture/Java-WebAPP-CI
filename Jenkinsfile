@@ -242,8 +242,7 @@ pipeline {
 
     post {
         always {
-            def report_file = '**/surefire-report.html'
-            postBuildTestArtifacts('My Test Report', report_file)
+            postBuildTestArtifacts('My Test Report', '**/surefire-report.html')
         }
 
         success {
