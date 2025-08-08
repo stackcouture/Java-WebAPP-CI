@@ -59,21 +59,16 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
                     script {
-                        def sbomXml = 'target/bom.xml'
-                        def sbomJson = 'target/bom.json'
-                        def sbomHtml = 'target/bom.html'
+                        def sbomFile = 'target/bom.xml'
                         def projectName = "${params.ECR_REPO_NAME}"
                         def projectVersion = "${env.COMMIT_SHA}"
                         def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
-                        if (!fileExists(sbomXml)) {
-                            error "SBOM XML not found: ${sbomXml}"
+                        if (!fileExists(sbomFile)) {
+                            error "SBOM not found: ${sbomFile}"
                         }
 
-                        // Archive original SBOM
-                        archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
-
-                        // Upload to Dependency Track
+                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
                         retry(3) {
                             sh """
                                 curl -sSf -X POST "${dependencyTrackUrl}" \
@@ -82,66 +77,13 @@ pipeline {
                                     -F "autoCreate=true" \
                                     -F "projectName=${projectName}" \
                                     -F "projectVersion=${projectVersion}" \
-                                    -F "bom=@${sbomXml}"
+                                    -F "bom=@${sbomFile}"
                             """
                         }
-
-                        // Generate JSON from XML using cyclonedx-cli (requires pre-installed)
-                        sh "cyclonedx-cli convert --input ${sbomXml} --output ${sbomJson}"
-
-                        // Download Trivy HTML template
-                        sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
-
-                        // Generate HTML from JSON using Trivy
-                        sh "trivy sbom ${sbomJson} --format template --template '@contrib/html.tpl' --output ${sbomHtml}"
-
-                        // Archive JSON and HTML
-                        archiveArtifacts artifacts: 'target/bom.json,target/bom.html', allowEmptyArchive: true
-
-                        // Publish HTML to Jenkins
-                        publishHTML([
-                            reportName: 'SBOM HTML Report',
-                            reportDir: 'target',
-                            reportFiles: 'bom.html',
-                            keepAll: true,
-                            alwaysLinkToLastBuild: true,
-                            allowMissing: false
-                        ])
                     }
                 }
             }
         }
-
-
-        // stage('Publish and Upload SBOM to Dependency-Track') {
-        //     steps {
-        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
-        //             script {
-        //                 def sbomFile = 'target/bom.xml'
-        //                 def projectName = "${params.ECR_REPO_NAME}"
-        //                 def projectVersion = "${env.COMMIT_SHA}"
-        //                 def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
-
-        //                 if (!fileExists(sbomFile)) {
-        //                     error "SBOM not found: ${sbomFile}"
-        //                 }
-
-        //                 archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
-        //                 retry(3) {
-        //                     sh """
-        //                         curl -sSf -X POST "${dependencyTrackUrl}" \
-        //                             -H "X-Api-Key: ${DT_API_KEY}" \
-        //                             -H "Content-Type: multipart/form-data" \
-        //                             -F "autoCreate=true" \
-        //                             -F "projectName=${projectName}" \
-        //                             -F "projectVersion=${projectVersion}" \
-        //                             -F "bom=@${sbomFile}"
-        //                     """
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
 
 
          stage('Prepare Trivy Template') {

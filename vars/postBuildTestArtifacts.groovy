@@ -16,10 +16,6 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
             def reportDirPath = new File(actualFile.path).getParent()
             def reportFileName = new File(actualFile.path).getName()
 
-            echo "Resolved report: ${actualFile.path}"
-            echo "Using reportDirPath: ${reportDirPath}"
-            echo "Using reportFileName: ${reportFileName}"
-
             publishHTML([
                 reportName: reportName,
                 reportDir: reportDirPath,
@@ -31,25 +27,5 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
         } else {
             echo "No HTML test report found matching: ${reportDir}/**/${reportFilePattern}"
         }
-
-        // def reportDir = 'target/site'
-        // def resolved = findFiles(glob: "${reportDir}/**/${reportFilePattern}")
-
-        // if (resolved.length > 0) {
-        //     def actualFile = resolved[0]
-
-        //     def reportDirPath = new File(actualFile.path).getParent() 
-
-        //     publishHTML([
-        //         reportName: reportName,
-        //         reportDir: reportDirPath,
-        //         reportFiles: reportFilePattern,
-        //         keepAll: true,
-        //         alwaysLinkToLastBuild: true,
-        //         allowMissing: true
-        //     ])
-        // } else {
-        //     echo "No HTML test report found matching: ${reportDir}/${reportFilePattern}"
-        // }
     }
 }
