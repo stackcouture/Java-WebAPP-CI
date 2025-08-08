@@ -9,8 +9,7 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
         }
 
         def reportDir = 'target/site'
-        def reportFilePattern = 'surefire-report.html'
-
+        reportFilePattern = reportFilePattern.replaceFirst(/^\*\//, '')
         def fullPath = "${reportDir}/${reportFilePattern}"
 
         if (fileExists(fullPath)) {
