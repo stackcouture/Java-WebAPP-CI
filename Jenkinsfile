@@ -109,7 +109,6 @@ pipeline {
             steps {
                  script {
                     buildDockerImage("${params.ECR_REPO_NAME}:${env.COMMIT_SHA}")
-                    //sh "docker build -t ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} ."
                  }
             }
         }
@@ -194,11 +193,6 @@ pipeline {
                     def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
                     def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
 
-                    // Check if necessary environment variables are set
-                    if (!env.COMMIT_SHA || !env.BUILD_NUMBER) {
-                        error("Environment variables COMMIT_SHA or BUILD_NUMBER are not set.")
-                    }
-
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
                         runGptSecuritySummary(
                             "my-app", 
@@ -218,28 +212,7 @@ pipeline {
 
     post {
         always {
-            script {
-                archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
-
-                if (fileExists('target/surefire-reports')) {
-                    junit 'target/surefire-reports/*.xml'
-                } else {
-                    echo "No test results found."
-                }
-
-                if (fileExists('target/test-report.html')) {
-                    publishHTML([
-                        reportName: 'Test Report',
-                        reportDir: 'target',
-                        reportFiles: 'target/**.html',
-                        keepAll: true,
-                        alwaysLinkToLastBuild: true,
-                        allowMissing: true
-                    ])
-                } else {
-                    echo "No HTML test report found to publish."
-                }
-            }
+            postBuildTestArtifacts('My Test Report', '**/test-report.html')
         }
 
         success {
