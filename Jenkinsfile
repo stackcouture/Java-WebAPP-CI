@@ -53,7 +53,7 @@ pipeline {
             steps {
                 sh 'mvn clean verify'
             }
-        }
+        }   
 
         stage('Publish and Upload SBOM to Dependency-Track') {
             steps {
@@ -61,20 +61,19 @@ pipeline {
                     script {
                         def sbomXml = 'target/bom.xml'
                         def sbomHtml = 'target/bom.html'
-                        def projectName = "${params.ECR_REPO_NAME}"
-                        def projectVersion = "${env.COMMIT_SHA}"
+                        def projectName = params.ECR_REPO_NAME
+                        def projectVersion = env.COMMIT_SHA
                         def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
-                        // Generate CycloneDX SBOM using Trivy
-                        sh "trivy sbom --format cyclonedx --output ${sbomXml} ."
-
-                        // Upload to Dependency-Track
+                        // Check if SBOM exists
                         if (!fileExists(sbomXml)) {
                             error "SBOM not found: ${sbomXml}"
                         }
 
+                        // Archive the SBOM
                         archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
 
+                        // Upload to Dependency-Track
                         retry(3) {
                             sh """
                                 curl -sSf -X POST "${dependencyTrackUrl}" \\
@@ -87,16 +86,14 @@ pipeline {
                             """
                         }
 
-                        // Download Trivy HTML template
+                        // Download Trivy template and convert SBOM to HTML
                         sh '''
                             mkdir -p contrib
                             curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+                            trivy sbom --input target/bom.xml --format template --template '@/contrib/html.tpl' --output target/bom.html
                         '''
 
-                        // Convert SBOM to HTML using Trivy and the template
-                        sh "trivy sbom --input ${sbomXml} --format template --template '@/contrib/html.tpl' --output ${sbomHtml}"
-
-                        // Publish HTML report
+                        // Publish HTML report in Jenkins
                         publishHTML([
                             reportName: 'SBOM HTML Report',
                             reportDir: 'target',
@@ -109,6 +106,61 @@ pipeline {
                 }
             }
         }
+
+        // stage('Publish and Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+        //             script {
+        //                 def sbomXml = 'target/bom.xml'
+        //                 def sbomHtml = 'target/bom.html'
+        //                 def projectName = "${params.ECR_REPO_NAME}"
+        //                 def projectVersion = "${env.COMMIT_SHA}"
+        //                 def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
+
+        //                 // Generate CycloneDX SBOM using Trivy
+        //                 sh "trivy sbom --format cyclonedx --output ${sbomXml} ."
+
+        //                 // Upload to Dependency-Track
+        //                 if (!fileExists(sbomXml)) {
+        //                     error "SBOM not found: ${sbomXml}"
+        //                 }
+
+        //                 archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
+
+        //                 retry(3) {
+        //                     sh """
+        //                         curl -sSf -X POST "${dependencyTrackUrl}" \\
+        //                             -H "X-Api-Key: ${DT_API_KEY}" \\
+        //                             -H "Content-Type: multipart/form-data" \\
+        //                             -F "autoCreate=true" \\
+        //                             -F "projectName=${projectName}" \\
+        //                             -F "projectVersion=${projectVersion}" \\
+        //                             -F "bom=@${sbomXml}"
+        //                     """
+        //                 }
+
+        //                 // Download Trivy HTML template
+        //                 sh '''
+        //                     mkdir -p contrib
+        //                     curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+        //                 '''
+
+        //                 // Convert SBOM to HTML using Trivy and the template
+        //                 sh "trivy sbom --input ${sbomXml} --format template --template '@/contrib/html.tpl' --output ${sbomHtml}"
+
+        //                 // Publish HTML report
+        //                 publishHTML([
+        //                     reportName: 'SBOM HTML Report',
+        //                     reportDir: 'target',
+        //                     reportFiles: 'bom.html',
+        //                     keepAll: true,
+        //                     alwaysLinkToLastBuild: true,
+        //                     allowMissing: false
+        //                 ])
+        //             }
+        //         }
+        //     }
+        // }
 
 
          stage('Prepare Trivy Template') {
