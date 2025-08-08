@@ -65,21 +65,38 @@ pipeline {
                         def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
                         if (!fileExists(sbomFile)) {
-                            error "❌ SBOM not found: ${sbomFile}"
+                            error "SBOM not found: ${sbomFile}"
                         }
 
                         archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+
                         retry(3) {
                             sh """
-                                curl -sSf -X POST "${dependencyTrackUrl}" \
-                                    -H "X-Api-Key: ${DT_API_KEY}" \
-                                    -H "Content-Type: multipart/form-data" \
-                                    -F "autoCreate=true" \
-                                    -F "projectName=${projectName}" \
-                                    -F "projectVersion=${projectVersion}" \
+                                curl -sSf -X POST "${dependencyTrackUrl}" \\
+                                    -H "X-Api-Key: ${DT_API_KEY}" \\
+                                    -H "Content-Type: multipart/form-data" \\
+                                    -F "autoCreate=true" \\
+                                    -F "projectName=${projectName}" \\
+                                    -F "projectVersion=${projectVersion}" \\
                                     -F "bom=@${sbomFile}"
                             """
                         }
+
+                        sh 'curl -sSfL -o cyclonedx-cli.jar https://github.com/CycloneDX/cyclonedx-cli/releases/download/v1.11.3/cyclonedx-cli-1.11.3.jar'
+                        
+                        sh 'java -jar cyclonedx-cli.jar convert --input-file target/bom.xml --output-file target/bom.html --output-format html'
+
+                        // Publish the SBOM HTML report
+                        publishHTML([
+                            reportName: 'SBOM HTML Report',
+                            reportDir: 'target',
+                            reportFiles: 'bom.html',
+                            keepAll: true,
+                            alwaysLinkToLastBuild: true,
+                            allowMissing: false
+                        ])
+                        
+                        sh 'rm cyclonedx-cli.jar'
                     }
                 }
             }
