@@ -90,9 +90,8 @@ pipeline {
                         sh '''
                             mkdir -p contrib
                             curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
-                            trivy sbom --input target/bom.xml --format template --template '@/contrib/html.tpl' --output target/bom.html
+                            trivy sbom target/bom.xml --format template --template '@/contrib/html.tpl' --output target/bom.html
                         '''
-
                         // Publish HTML report in Jenkins
                         publishHTML([
                             reportName: 'SBOM HTML Report',
