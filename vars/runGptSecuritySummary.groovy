@@ -237,65 +237,60 @@ def parseStatusBadge(String gptContent) {
 }
 
 def getSonarQubeSummary() {
-    def projectKey = "Java-App" 
+    def projectKey = "Java-App"
     def sonarHost = "http://65.1.135.112:9000"
-    def sonarToken = env.SONAR_TOKEN
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
     def qualityGateJson = null
     def issuesJson = null
 
-    try {
-        def qualityGateResponse = sh(
-            script: "curl -sf -u ${sonarToken}: ${apiQualityGateUrl}",
-            returnStdout: true
-        ).trim()
+    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+        try {
+            def qualityGateResponse = sh(
+                script: "curl -sf -u \$SONAR_TOKEN: ${apiQualityGateUrl}",
+                returnStdout: true
+            ).trim()
 
-        if (!qualityGateResponse) {
-            echo "Empty response from SonarQube Quality Gate API: ${apiQualityGateUrl}"
+            if (!qualityGateResponse) {
+                echo "Empty response from SonarQube Quality Gate API: ${apiQualityGateUrl}"
+                return getSonarFallbackResult()
+            }
+
+            qualityGateJson = readJSON text: qualityGateResponse
+
+        } catch (Exception e) {
+            echo "Error fetching or parsing SonarQube Quality Gate response: ${e.message}"
             return getSonarFallbackResult()
         }
 
-        qualityGateJson = readJSON text: qualityGateResponse
+        try {
+            def issuesResponse = sh(
+                script: "curl -sf -u \$SONAR_TOKEN: ${apiIssuesUrl}",
+                returnStdout: true
+            ).trim()
 
-    } catch (Exception e) {
-        echo "Error fetching or parsing SonarQube Quality Gate response: ${e.message}"
-        return getSonarFallbackResult()
-    }
+            if (!issuesResponse) {
+                echo "Empty response from SonarQube Issues API: ${apiIssuesUrl}"
+                return getSonarFallbackResult()
+            }
 
-    try {
-        def issuesResponse = sh(
-            script: "curl -sf -u ${sonarToken}: ${apiIssuesUrl}",
-            returnStdout: true
-        ).trim()
+            issuesJson = readJSON text: issuesResponse
 
-        if (!issuesResponse) {
-            echo "Empty response from SonarQube Issues API: ${apiIssuesUrl}"
+        } catch (Exception e) {
+            echo "Error fetching or parsing SonarQube Issues response: ${e.message}"
             return getSonarFallbackResult()
         }
-
-        issuesJson = readJSON text: issuesResponse
-
-    } catch (Exception e) {
-        echo "Error fetching or parsing SonarQube Issues response: ${e.message}"
-        return getSonarFallbackResult()
     }
 
     def issues = issuesJson.issues ?: []
 
     def codeSmells = issues.findAll { it.type == 'CODE_SMELL' }.collect {
-        [
-            severity: it.severity,
-            message: it.message
-        ]
+        [severity: it.severity, message: it.message]
     }
 
     def vulnerabilities = issues.findAll { it.type == 'VULNERABILITY' }.collect {
-        [
-            severity: it.severity,
-            message: it.message
-        ]
+        [severity: it.severity, message: it.message]
     }
 
     def sonarCodeSmellsSummary = codeSmells.collect {
