@@ -9,20 +9,23 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
         }
 
         def reportDir = 'target/site'
-        reportFilePattern = reportFilePattern.replaceFirst(/^\*\//, '')
-        def fullPath = "${reportDir}/${reportFilePattern}"
+        def resolved = findFiles(glob: "${reportDir}/${reportFilePattern}")
 
-        if (fileExists(fullPath)) {
+        if (resolved.length > 0) {
+            def actualFile = resolved[0] // Use the first match
+            
+            echo "Matched file: ${resolved}"
+            echo "Actual file: ${actualFile}"
             publishHTML([
                 reportName: reportName,
-                reportDir: reportDir,
+                reportDir: actualFile.path.replaceFirst("/${reportFilePattern}\$", ''),
                 reportFiles: reportFilePattern,
                 keepAll: true,
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
         } else {
-            echo "No HTML test report found at ${fullPath}"
+            echo "No HTML test report found matching: ${reportDir}/${reportFilePattern}"
         }
 
     }
