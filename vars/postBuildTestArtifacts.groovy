@@ -9,9 +9,11 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
         }
 
         def reportDir = 'target/site'
-        def checkFile = "${reportDir}/${reportFilePattern}".replace('**/', '')
+        def reportFilePattern = 'surefire-report.html'
 
-        if (fileExists(checkFile)) {
+        def fullPath = "${reportDir}/${reportFilePattern}"
+
+        if (fileExists(fullPath)) {
             publishHTML([
                 reportName: reportName,
                 reportDir: reportDir,
