@@ -59,16 +59,21 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
                     script {
-                        def sbomFile = 'target/bom.xml'
+                        def sbomXml = 'target/bom.xml'
+                        def sbomHtml = 'target/bom.html'
                         def projectName = "${params.ECR_REPO_NAME}"
                         def projectVersion = "${env.COMMIT_SHA}"
                         def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
-                        if (!fileExists(sbomFile)) {
-                            error "SBOM not found: ${sbomFile}"
+                        // Generate CycloneDX SBOM using Trivy
+                        sh "trivy sbom --format cyclonedx --output ${sbomXml} ."
+
+                        // Upload to Dependency-Track
+                        if (!fileExists(sbomXml)) {
+                            error "SBOM not found: ${sbomXml}"
                         }
 
-                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
+                        archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
 
                         retry(3) {
                             sh """
@@ -78,20 +83,20 @@ pipeline {
                                     -F "autoCreate=true" \\
                                     -F "projectName=${projectName}" \\
                                     -F "projectVersion=${projectVersion}" \\
-                                    -F "bom=@${sbomFile}"
+                                    -F "bom=@${sbomXml}"
                             """
                         }
 
+                        // Download Trivy HTML template
                         sh '''
-                            curl -L -o cyclonedx-cli https://github.com/CycloneDX/cyclonedx-cli/releases/download/v0.29.0/cyclonedx-linux-x64
-                            chmod +x cyclonedx-cli
+                            mkdir -p contrib
+                            curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
                         '''
 
-                        // Convert BOM XML to HTML report
-                        sh './cyclonedx-cli convert --input-file target/bom.xml --output-file target/bom.html --output-format html'
+                        // Convert SBOM to HTML using Trivy and the template
+                        sh "trivy sbom --input ${sbomXml} --format template --template '@/contrib/html.tpl' --output ${sbomHtml}"
 
-
-                        // Publish the SBOM HTML report
+                        // Publish HTML report
                         publishHTML([
                             reportName: 'SBOM HTML Report',
                             reportDir: 'target',
@@ -100,12 +105,11 @@ pipeline {
                             alwaysLinkToLastBuild: true,
                             allowMissing: false
                         ])
-                        
-                        sh 'rm cyclonedx-cli'
                     }
                 }
             }
         }
+
 
          stage('Prepare Trivy Template') {
             steps {
