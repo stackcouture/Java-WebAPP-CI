@@ -9,14 +9,14 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
         }
 
         def reportDir = 'target/site'
-        def resolved = findFiles(glob: "${reportDir}/${reportFilePattern}")
+        def resolved = findFiles(glob: "${reportDir}/**/${reportFilePattern}")
 
         if (resolved.length > 0) {
-            def actualFile = resolved[0] // First matched file
+            def actualFile = resolved[0]
             echo "Matched file: ${resolved*.path}"
             echo "Actual file: ${actualFile.path}"
 
-            def reportDirPath = actualFile.path.replace("/${reportFilePattern}", '')
+            def reportDirPath = new File(actualFile.path).getParent()  // ✅ this is the fix
 
             publishHTML([
                 reportName: reportName,
