@@ -59,60 +59,90 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
                     script {
-                        def sbomXml = 'target/bom.xml'
-                        def sbomJson = 'target/bom.json'
-                        def sbomHtml = 'target/bom.html'
-                        def projectName = params.ECR_REPO_NAME
-                        def projectVersion = env.COMMIT_SHA
+                        def sbomFile = 'target/bom.xml'
+                        def projectName = "${params.ECR_REPO_NAME}"
+                        def projectVersion = "${env.COMMIT_SHA}"
                         def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
-                        // Validate SBOM XML exists
-                        if (!fileExists(sbomXml)) {
-                            error "SBOM XML not found: ${sbomXml}"
+                        if (!fileExists(sbomFile)) {
+                            error "SBOM not found: ${sbomFile}"
                         }
 
-                        // Archive the SBOM XML
-                        archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
-
-                        // Upload XML SBOM to Dependency-Track
+                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
                         retry(3) {
                             sh """
-                                curl -sSf -X POST "${dependencyTrackUrl}" \\
-                                    -H "X-Api-Key: ${DT_API_KEY}" \\
-                                    -H "Content-Type: multipart/form-data" \\
-                                    -F "autoCreate=true" \\
-                                    -F "projectName=${projectName}" \\
-                                    -F "projectVersion=${projectVersion}" \\
-                                    -F "bom=@${sbomXml}"
+                                curl -sSf -X POST "${dependencyTrackUrl}" \
+                                    -H "X-Api-Key: ${DT_API_KEY}" \
+                                    -H "Content-Type: multipart/form-data" \
+                                    -F "autoCreate=true" \
+                                    -F "projectName=${projectName}" \
+                                    -F "projectVersion=${projectVersion}" \
+                                    -F "bom=@${sbomFile}"
                             """
                         }
-
-                        // ✅ Convert SBOM XML to JSON using cyclonedx-cli
-                        sh "cyclonedx-cli convert --input ${sbomXml} --output ${sbomJson}"
-
-                        // ✅ Generate HTML report from JSON SBOM
-                        sh '''
-                            mkdir -p contrib
-                            curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
-                            trivy sbom target/bom.json --format template --template '@/contrib/html.tpl' --output target/bom.html
-                        '''
-
-                        // ✅ Publish HTML in Jenkins
-                        publishHTML([
-                            reportName: 'SBOM HTML Report',
-                            reportDir: 'target',
-                            reportFiles: 'bom.html',
-                            keepAll: true,
-                            alwaysLinkToLastBuild: true,
-                            allowMissing: false
-                        ])
-
-                        // Optional: archive all generated files
-                        archiveArtifacts artifacts: 'target/bom.*', allowEmptyArchive: true
                     }
                 }
             }
         }
+
+        // stage('Publish and Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
+        //             script {
+        //                 def sbomXml = 'target/bom.xml'
+        //                 def sbomJson = 'target/bom.json'
+        //                 def sbomHtml = 'target/bom.html'
+        //                 def projectName = params.ECR_REPO_NAME
+        //                 def projectVersion = env.COMMIT_SHA
+        //                 def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
+
+        //                 // Validate SBOM XML exists
+        //                 if (!fileExists(sbomXml)) {
+        //                     error "SBOM XML not found: ${sbomXml}"
+        //                 }
+
+        //                 // Archive the SBOM XML
+        //                 archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
+
+        //                 // Upload XML SBOM to Dependency-Track
+        //                 retry(3) {
+        //                     sh """
+        //                         curl -sSf -X POST "${dependencyTrackUrl}" \\
+        //                             -H "X-Api-Key: ${DT_API_KEY}" \\
+        //                             -H "Content-Type: multipart/form-data" \\
+        //                             -F "autoCreate=true" \\
+        //                             -F "projectName=${projectName}" \\
+        //                             -F "projectVersion=${projectVersion}" \\
+        //                             -F "bom=@${sbomXml}"
+        //                     """
+        //                 }
+
+        //                 // ✅ Convert SBOM XML to JSON using cyclonedx-cli
+        //                 sh "cyclonedx-cli convert --input ${sbomXml} --output ${sbomJson}"
+
+        //                 // ✅ Generate HTML report from JSON SBOM
+        //                 sh '''
+        //                     mkdir -p contrib
+        //                     curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
+        //                     trivy sbom target/bom.json --format template --template '@/contrib/html.tpl' --output target/bom.html
+        //                 '''
+
+        //                 // ✅ Publish HTML in Jenkins
+        //                 publishHTML([
+        //                     reportName: 'SBOM HTML Report',
+        //                     reportDir: 'target',
+        //                     reportFiles: 'bom.html',
+        //                     keepAll: true,
+        //                     alwaysLinkToLastBuild: true,
+        //                     allowMissing: false
+        //                 ])
+
+        //                 // Optional: archive all generated files
+        //                 archiveArtifacts artifacts: 'target/bom.*', allowEmptyArchive: true
+        //             }
+        //         }
+        //     }
+        // }
 
 
 
