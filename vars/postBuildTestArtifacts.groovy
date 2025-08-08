@@ -9,9 +9,9 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
         }
 
         def reportDir = 'target/site'
-        def fullPath = "${reportDir}/${reportFilePattern}"
+        def checkFile = "${reportDir}/${reportFilePattern}".replace('**/', '')
 
-        if (fileExists(fullPath)) {
+        if (fileExists(checkFile)) {
             publishHTML([
                 reportName: reportName,
                 reportDir: reportDir,
@@ -21,8 +21,8 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
                 allowMissing: true
             ])
         } else {
-            echo "No HTML test report found at ${fullPath}"
+            echo "No HTML test report found at ${checkFile}"
         }
-        
+
     }
 }
