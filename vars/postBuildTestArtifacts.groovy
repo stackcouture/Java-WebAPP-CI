@@ -22,7 +22,7 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
                 allowMissing: true
             ])
         } else {
-            echo "No HTML test report found at ${checkFile}"
+            echo "No HTML test report found at ${fullPath}"
         }
 
     }
