@@ -17,9 +17,6 @@ def call(String stageName, String imageTag) {
                 echo "Snyk scan failed or returned no data. Please check Jenkins logs or retry." >> '${htmlFile}'
             fi
             echo "</pre></body></html>" >> '${htmlFile}'
-
-             # Upload to Snyk dashboard
-            snyk container monitor '${imageTag}' --project-name='${env.JOB_NAME}-${stageName}' > /dev/null || true
         """
     }
 

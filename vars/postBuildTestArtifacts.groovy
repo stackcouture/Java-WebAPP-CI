@@ -1,4 +1,4 @@
-def call(String reportName = 'Test Report', String reportFilePattern = '**/*.html') {
+def call(String reportName = 'Test Report', String reportFilePattern = 'surefire-report.html') {
     script {
         archiveArtifacts artifacts: "target/surefire-reports/*.xml", allowEmptyArchive: true
 
@@ -8,17 +8,21 @@ def call(String reportName = 'Test Report', String reportFilePattern = '**/*.htm
             echo "No test results found."
         }
 
-        if (fileExists('target/test-report.html')) {
+        def reportDir = 'target/site'
+        def fullPath = "${reportDir}/${reportFilePattern}"
+
+        if (fileExists(fullPath)) {
             publishHTML([
                 reportName: reportName,
-                reportDir: 'target',
+                reportDir: reportDir,
                 reportFiles: reportFilePattern,
                 keepAll: true,
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
         } else {
-            echo "No HTML test report found to publish."
+            echo "No HTML test report found at ${fullPath}"
         }
+        
     }
 }

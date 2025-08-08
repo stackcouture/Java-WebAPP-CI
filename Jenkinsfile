@@ -242,7 +242,7 @@ pipeline {
 
     post {
         always {
-            postBuildTestArtifacts('My Test Report', '**/test-report.html')
+            postBuildTestArtifacts('My Test Report', '**/surefire-report.html')
         }
 
         success {
