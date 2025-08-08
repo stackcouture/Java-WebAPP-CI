@@ -13,21 +13,43 @@ def call(String reportName = 'Test Report', String reportFilePattern = 'surefire
 
         if (resolved.length > 0) {
             def actualFile = resolved[0]
-            echo "Matched file: ${resolved*.path}"
-            echo "Actual file: ${actualFile.path}"
+            def reportDirPath = new File(actualFile.path).getParent()
+            def reportFileName = new File(actualFile.path).getName()
 
-            def reportDirPath = new File(actualFile.path).getParent()  // ✅ this is the fix
+            echo "Resolved report: ${actualFile.path}"
+            echo "Using reportDirPath: ${reportDirPath}"
+            echo "Using reportFileName: ${reportFileName}"
 
             publishHTML([
                 reportName: reportName,
                 reportDir: reportDirPath,
-                reportFiles: reportFilePattern,
+                reportFiles: reportFileName,
                 keepAll: true,
                 alwaysLinkToLastBuild: true,
                 allowMissing: true
             ])
         } else {
-            echo "No HTML test report found matching: ${reportDir}/${reportFilePattern}"
+            echo "No HTML test report found matching: ${reportDir}/**/${reportFilePattern}"
         }
+
+        // def reportDir = 'target/site'
+        // def resolved = findFiles(glob: "${reportDir}/**/${reportFilePattern}")
+
+        // if (resolved.length > 0) {
+        //     def actualFile = resolved[0]
+
+        //     def reportDirPath = new File(actualFile.path).getParent() 
+
+        //     publishHTML([
+        //         reportName: reportName,
+        //         reportDir: reportDirPath,
+        //         reportFiles: reportFilePattern,
+        //         keepAll: true,
+        //         alwaysLinkToLastBuild: true,
+        //         allowMissing: true
+        //     ])
+        // } else {
+        //     echo "No HTML test report found matching: ${reportDir}/${reportFilePattern}"
+        // }
     }
 }
