@@ -60,13 +60,13 @@ pipeline {
                 withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
                     script {
                         def sbomXml = 'target/bom.xml'
-                        def sbomJson = 'target/bom.json'           // Added JSON SBOM path
+                        def sbomJson = 'target/bom.json'
                         def sbomHtml = 'target/bom.html'
                         def projectName = params.ECR_REPO_NAME
                         def projectVersion = env.COMMIT_SHA
                         def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
-                        // Check if SBOM XML exists before upload
+                        // Validate SBOM XML exists
                         if (!fileExists(sbomXml)) {
                             error "SBOM XML not found: ${sbomXml}"
                         }
@@ -74,7 +74,7 @@ pipeline {
                         // Archive the SBOM XML
                         archiveArtifacts artifacts: sbomXml, allowEmptyArchive: true
 
-                        // Upload XML SBOM to Dependency-Track (still XML, as your server probably expects it)
+                        // Upload XML SBOM to Dependency-Track
                         retry(3) {
                             sh """
                                 curl -sSf -X POST "${dependencyTrackUrl}" \\
@@ -87,18 +87,17 @@ pipeline {
                             """
                         }
 
-                        // Now generate the HTML report from the JSON SBOM (use bom.json here!)
-                        if (!fileExists(sbomJson)) {
-                            error "SBOM JSON not found: ${sbomJson}"
-                        }
+                        // ✅ Convert SBOM XML to JSON using cyclonedx-cli
+                        sh "cyclonedx-cli convert --input ${sbomXml} --output ${sbomJson}"
 
+                        // ✅ Generate HTML report from JSON SBOM
                         sh '''
                             mkdir -p contrib
                             curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl
                             trivy sbom target/bom.json --format template --template '@/contrib/html.tpl' --output target/bom.html
                         '''
 
-                        // Publish HTML report in Jenkins
+                        // ✅ Publish HTML in Jenkins
                         publishHTML([
                             reportName: 'SBOM HTML Report',
                             reportDir: 'target',
@@ -107,10 +106,14 @@ pipeline {
                             alwaysLinkToLastBuild: true,
                             allowMissing: false
                         ])
+
+                        // Optional: archive all generated files
+                        archiveArtifacts artifacts: 'target/bom.*', allowEmptyArchive: true
                     }
                 }
             }
         }
+
 
 
 
