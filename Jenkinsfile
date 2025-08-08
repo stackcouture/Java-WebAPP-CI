@@ -82,9 +82,14 @@ pipeline {
                             """
                         }
 
-                        sh 'curl -sSfL -o cyclonedx-cli.jar https://github.com/CycloneDX/cyclonedx-cli/releases/download/v1.11.3/cyclonedx-cli-1.11.3.jar'
-                        
-                        sh 'java -jar cyclonedx-cli.jar convert --input-file target/bom.xml --output-file target/bom.html --output-format html'
+                        sh '''
+                            curl -L -o cyclonedx-cli https://github.com/CycloneDX/cyclonedx-cli/releases/download/v0.29.0/cyclonedx-linux-x64
+                            chmod +x cyclonedx-cli
+                        '''
+
+                        // Convert BOM XML to HTML report
+                        sh './cyclonedx-cli convert --input-file target/bom.xml --output-file target/bom.html --output-format html'
+
 
                         // Publish the SBOM HTML report
                         publishHTML([
@@ -96,7 +101,7 @@ pipeline {
                             allowMissing: false
                         ])
                         
-                        sh 'rm cyclonedx-cli.jar'
+                        sh 'rm cyclonedx-cli'
                     }
                 }
             }
