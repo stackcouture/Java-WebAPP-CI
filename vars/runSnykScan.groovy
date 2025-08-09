@@ -1,4 +1,3 @@
-// def call(String stageName, String imageTag) {
 def call(Map config = [:]) {
 
     def stageName = config.stageName ?: error("Missing 'stageName'")

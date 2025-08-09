@@ -19,6 +19,7 @@ pipeline {
         SLACK_CHANNEL = '#all-jenkins'
         SLACK_TOKEN = credentials('slack-token')
         DEPENDENCY_TRACK_URL = 'http://65.0.179.180:8081/api/v1/bom'
+        SONAR_HOST = "http://15.206.27.224:9000"
     }
 
     tools {
@@ -94,31 +95,31 @@ pipeline {
             }
         }
 
-        // stage('SonarQube Analysis') {
-        //     steps {
-        //         script {
-        //             sonarScan(
-        //                 projectKey: 'Java-App',
-        //                 sources: 'src/main/java,src/test/java',
-        //                 binaries: 'target/classes',
-        //                 exclusions: '**/*.js',
-        //                 scannerTool: 'sonar-scanner',
-        //                 sonarEnv: 'sonar-server'
-        //             )
-        //         }
-        //     }
-        // }
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    sonarScan(
+                        projectKey: 'Java-App',
+                        sources: 'src/main/java,src/test/java',
+                        binaries: 'target/classes',
+                        exclusions: '**/*.js',
+                        scannerTool: 'sonar-scanner',
+                        sonarEnv: 'sonar-server'
+                    )
+                }
+            }
+        }
 
-        // stage('SonarQube Quality Gate') {
-        //     steps {
-        //         script {
-        //             sonarQualityGateCheck(
-        //                 secretName: 'my-app/secrets',
-        //                 timeoutMinutes: 5
-        //             )
-        //         }
-        //     }
-        // }
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    sonarQualityGateCheck(
+                        secretName: 'my-app/secrets',
+                        timeoutMinutes: 5
+                    )
+                }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
@@ -153,7 +154,6 @@ pipeline {
                                 imageTag: localTag,
                                 secretName: 'my-app/secrets'
                             )
-                           // runSnykScan("before-push", localTag)
                         }
                     }
                 }
@@ -170,7 +170,6 @@ pipeline {
                         region: "${env.REGION}",
                         secretName: 'my-app/secrets'
                     )
-                  //  dockerPush("docker-push", "${env.COMMIT_SHA}", params.ECR_REPO_NAME, params.AWS_ACCOUNT_ID, "${env.REGION}")
                 }
             }
         }
@@ -201,7 +200,6 @@ pipeline {
                                     imageTag: pushedTag,
                                     secretName: 'my-app/secrets'
                                 )
-                                //runSnykScan("after-push", pushedTag)
                             }
                         }
                     }
@@ -224,27 +222,31 @@ pipeline {
             }
         }
 
-        // stage('Generate GPT Report') {
-        //     steps {
-        //         script {
+        stage('Generate GPT Report') {
+            steps {
+                script {
 
-        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
-        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+                    def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+                    def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
 
-        //             if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-        //                 runGptSecuritySummary(
-        //                     "my-app", 
-        //                     env.COMMIT_SHA, 
-        //                     env.BUILD_NUMBER, 
-        //                     trivyHtmlPath, 
-        //                     snykJsonPath
-        //                 )
-        //             } else {
-        //                 error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
-        //             }
-        //         }   
-        //     } 
-        // }
+                    if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
+
+                        runGptSecuritySummary(
+                            projectName: "my-app", 
+                            gitSha: "${env.COMMIT_SHA}",
+                            buildNumber: "${env.BUILD_NUMBER}",
+                            trivyHtmlPath: trivyHtmlPath,
+                            snykJsonPath: snykJsonPath,
+                            sonarHost: "${env.SONAR_HOST}",
+                            secretName: 'my-app/secrets'
+                        )
+
+                    } else {
+                        error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
+                    }
+                }   
+            } 
+        }
 
     }
 

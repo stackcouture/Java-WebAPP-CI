@@ -1,4 +1,16 @@
-def call(String projectName, String gitSha, String buildNumber, String trivyHtmlPath, String snykJsonPath) {
+def call(Map config = [:]) {
+
+    def projectName = config.imageTag ?: error("Missing 'projectName'")
+    def gitSha = config.gitSha ?: error("Missing 'gitSha'")
+    def buildNumber = config.buildNumber ?: error("Missing 'buildNumber'")
+    def trivyHtmlPath = config.trivyHtmlPath ?: error("Missing 'trivyHtmlPath'")
+    def snykJsonPath = config.snykJsonPath ?: error("Missing 'snykJsonPath'")
+    def sonarHost = config.sonarHost 
+    def secretName = config.secretName ?: error("Missing 'secretName'")
+
+    def secrets = getAwsSecret(secretName, 'ap-south-1')
+    def openai_api_key = secrets.openai_api_key
+
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
@@ -73,123 +85,122 @@ def call(String projectName, String gitSha, String buildNumber, String trivyHtml
 
     writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
 
-    withCredentials([string(credentialsId: 'openai-api-key', variable: 'OPENAI_API_KEY')]) {
-        def responseJson = sh(script: """
-            curl -s https://api.openai.com/v1/chat/completions \\
-            -H "Authorization: Bearer \$OPENAI_API_KEY" \\
-            -H "Content-Type: application/json" \\
-            -d @${gptPromptFile}
-        """, returnStdout: true).trim()
+    def responseJson = sh(script: """
+        curl -s https://api.openai.com/v1/chat/completions \\
+        -H "Authorization: Bearer ${openai_api_key}" \\
+        -H "Content-Type: application/json" \\
+        -d @${gptPromptFile}
+    """, returnStdout: true).trim()
 
-        if (!responseJson) {
-            error("Received empty or invalid response from OpenAI API")
-        }
-
-        writeFile file: gptOutputFile, text: responseJson
-
-        try {
-            def response = readJSON text: responseJson
-            def gptContent = response?.choices?.get(0)?.message?.content
-
-            if (!gptContent) {
-                error("GPT response is missing the expected content field")
-            }
-
-            gptContent = gptContent
-                .replaceAll(/(?m)^```html\s*/, "")
-                .replaceAll(/(?m)^```$/, "")
-                .trim()
-
-            def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
-
-            def htmlContent = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Security Report - Build Summary</title>
-                <style>
-                    body {
-                        font-family: Arial, sans-serif;
-                        background-color: #fff;
-                        margin: 20px;
-                        line-height: 1.4;
-                        font-size: 14px;
-                    }
-
-                    h1, h2 {
-                        color: #2c3e50;
-                        margin-bottom: 10px;
-                    }
-
-                    .section {
-                        margin-bottom: 20px;
-                    }
-
-                    ul {
-                        margin: 0;
-                        padding-left: 18px;
-                    }
-
-                    .highlight {
-                        background: #f5f5f5;
-                        padding: 12px;
-                        border-left: 4px solid #2c3e50;
-                        white-space: pre-wrap;
-                        word-wrap: break-word;
-                        font-family: monospace;
-                        font-size: 13px;
-                    }
-
-                    .badge-ok {
-                        color: green;
-                        font-weight: bold;
-                    }
-
-                    .badge-fail {
-                        color: red;
-                        font-weight: bold;
-                    }
-
-                    a {
-                        color: #2c3e50;
-                        text-decoration: underline;
-                    }
-
-                    footer {
-                        margin-top: 30px;
-                        font-size: 12px;
-                        color: #888;
-                    }
-
-                    img {
-                        max-height: 60px;
-                        margin-bottom: 20px;
-                    }
-                </style>
-            </head>
-            <body>
-                <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
-
-                <div class="section">
-                    <h2>AI Recommendations - Security Scan Summary</h2>
-                    <div class="highlight">
-                        ${gptContent}
-                    </div>
-                </div>
-
-                <footer>
-                    <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
-                </footer>
-            </body>
-            </html>
-            """
-            writeFile file: gptReportFile, text: htmlContent
-            echo "AI-powered GPT report generated: ${gptReportFile}"
-        } catch (Exception e) {
-            error("Failed to parse or process the GPT response: ${e.getMessage()}")
-        }
+    if (!responseJson) {
+        error("Received empty or invalid response from OpenAI API")
     }
+
+    writeFile file: gptOutputFile, text: responseJson
+
+    try {
+        def response = readJSON text: responseJson
+        def gptContent = response?.choices?.get(0)?.message?.content
+
+        if (!gptContent) {
+            error("GPT response is missing the expected content field")
+        }
+
+        gptContent = gptContent
+            .replaceAll(/(?m)^```html\s*/, "")
+            .replaceAll(/(?m)^```$/, "")
+            .trim()
+
+        def (statusText, badgeColor, badgeClass) = parseStatusBadge(gptContent)
+
+        def htmlContent = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>Security Report - Build Summary</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #fff;
+                    margin: 20px;
+                    line-height: 1.4;
+                    font-size: 14px;
+                }
+
+                h1, h2 {
+                    color: #2c3e50;
+                    margin-bottom: 10px;
+                }
+
+                .section {
+                    margin-bottom: 20px;
+                }
+
+                ul {
+                    margin: 0;
+                    padding-left: 18px;
+                }
+
+                .highlight {
+                    background: #f5f5f5;
+                    padding: 12px;
+                    border-left: 4px solid #2c3e50;
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                    font-family: monospace;
+                    font-size: 13px;
+                }
+
+                .badge-ok {
+                    color: green;
+                    font-weight: bold;
+                }
+
+                .badge-fail {
+                    color: red;
+                    font-weight: bold;
+                }
+
+                a {
+                    color: #2c3e50;
+                    text-decoration: underline;
+                }
+
+                footer {
+                    margin-top: 30px;
+                    font-size: 12px;
+                    color: #888;
+                }
+
+                img {
+                    max-height: 60px;
+                    margin-bottom: 20px;
+                }
+            </style>
+        </head>
+        <body>
+            <img src="https://www.jenkins.io/images/logos/jenkins/jenkins.png" alt="Jenkins" height="70" />
+
+            <div class="section">
+                <h2>AI Recommendations - Security Scan Summary</h2>
+                <div class="highlight">
+                    ${gptContent}
+                </div>
+            </div>
+
+            <footer>
+                <p>Generated by Jenkins | AI Security Summary | Build #${buildNumber}</p>
+            </footer>
+        </body>
+        </html>
+        """
+        writeFile file: gptReportFile, text: htmlContent
+        echo "AI-powered GPT report generated: ${gptReportFile}"
+    } catch (Exception e) {
+        error("Failed to parse or process the GPT response: ${e.getMessage()}")
+    }
+    
 }
 
 
@@ -238,7 +249,7 @@ def parseStatusBadge(String gptContent) {
 
 def getSonarQubeSummary() {
     def projectKey = "Java-App"
-    def sonarHost = "http://13.126.210.125:9000"
+    def sonarHost = ${sonarHost}
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
