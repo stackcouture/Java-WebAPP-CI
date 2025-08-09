@@ -58,29 +58,14 @@ pipeline {
 
         stage('Publish and Upload SBOM to Dependency-Track') {
             steps {
-                withCredentials([string(credentialsId: 'dependency-track-api-key', variable: 'DT_API_KEY')]) {
-                    script {
-                        def sbomFile = 'target/bom.xml'
-                        def projectName = "${params.ECR_REPO_NAME}"
-                        def projectVersion = "${env.COMMIT_SHA}"
-
-                        if (!fileExists(sbomFile)) {
-                            error "SBOM not found: ${sbomFile}"
-                        }
-
-                        archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
-                        retry(3) {
-                            sh """
-                                curl -sSf -X POST "${env.DEPENDENCY_TRACK_URL}" \
-                                    -H "X-Api-Key: ${DT_API_KEY}" \
-                                    -H "Content-Type: multipart/form-data" \
-                                    -F "autoCreate=true" \
-                                    -F "projectName=${projectName}" \
-                                    -F "projectVersion=${projectVersion}" \
-                                    -F "bom=@${sbomFile}"
-                            """
-                        }
-                    }
+                script {
+                    uploadSbomToDependencyTrack(
+                        sbomFile: 'target/bom.xml',
+                        projectName: "${params.ECR_REPO_NAME}",
+                        projectVersion: "${env.COMMIT_SHA}",
+                        dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+                        credentialsId: 'dependency-track-api-key'
+                    )
                 }
             }
         }
