@@ -12,24 +12,28 @@ def call(Map config = [:]) {
     def secrets = getAwsSecret(secretName, 'ap-south-1')
     def SNYK_TOKEN = secrets.SNYK_TOKEN
 
-    echo "SNYK_TOKEN = ${SNYK_TOKEN}"
-    echo "imageTag = ${imageTag}"
-    echo "stageName = ${stageName}"
+sh """#!/bin/bash
+    set -e
+    mkdir -p '${reportDir}'
 
-    sh """
-        mkdir -p '${reportDir}'
+    export SNYK_TOKEN='${SNYK_TOKEN}'
 
-        snyk auth \$SNYK_TOKEN > /dev/null 2>&1
-        snyk container test '${imageTag}' --severity-threshold=high --exclude-base-image-vulns --json > '${jsonFile}' || true
+    snyk auth \$SNYK_TOKEN > /dev/null 2>&1 || { echo "Snyk auth failed"; exit 1; }
+    snyk container test '${imageTag}' --severity-threshold=high --exclude-base-image-vulns --json > '${jsonFile}' || true
 
-        echo "<html><body><pre>" > '${htmlFile}'
-        if [ -s '${jsonFile}' ]; then
-            cat '${jsonFile}' | jq . >> '${htmlFile}'
-        else
-            echo "Snyk scan failed or returned no data. Please check Jenkins logs or retry." >> '${htmlFile}'
-        fi
-        echo "</pre></body></html>" >> '${htmlFile}'
-    """
+    cat <<EOF > '${htmlFile}'
+<html><body><pre>
+EOF
+
+    if [ -s '${jsonFile}' ]; then
+        cat '${jsonFile}' | jq . >> '${htmlFile}'
+    else
+        echo "Snyk scan failed or returned no data. Please check Jenkins logs or retry." >> '${htmlFile}'
+    fi
+
+    echo "</pre></body></html>" >> '${htmlFile}'
+"""
+
 
     publishHTML(target: [
         allowMissing: true,
