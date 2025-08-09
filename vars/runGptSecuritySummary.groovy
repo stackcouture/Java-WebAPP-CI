@@ -78,9 +78,14 @@ def call(Map config = [:]) {
     def gptReportFile = "ai_report.html"
 
     def payload = [
-        model: "gpt-4o-mini",
-        messages: [[role: "user", content: prompt]]
+        model: "gpt-4o",
+        messages: [[role: "user", content: prompt]],
+        temperature: 0.7
     ]
+
+    if (!openai_api_key) {
+        error("OpenAI API key is missing from secrets. Please check the secret: ${secretName}")
+    }
 
     writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
 
@@ -91,8 +96,9 @@ def call(Map config = [:]) {
         -d @${gptPromptFile}
     """, returnStdout: true).trim()
 
-    if (!responseJson) {
-        error("Received empty or invalid response from OpenAI API")
+    if (!responseJson || responseJson.contains('"error"')) {
+        echo "Raw response from OpenAI:\n${responseJson}"
+        error("Received error or empty response from OpenAI API")
     }
 
     writeFile file: gptOutputFile, text: responseJson
@@ -101,7 +107,8 @@ def call(Map config = [:]) {
         def response = readJSON text: responseJson
         def gptContent = response?.choices?.get(0)?.message?.content
 
-        if (!gptContent) {
+        if (!gptContent?.trim()) {
+            echo "Raw GPT response: ${responseJson}"
             error("GPT response is missing the expected content field")
         }
 
