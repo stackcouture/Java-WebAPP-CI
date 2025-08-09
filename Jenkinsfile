@@ -56,19 +56,19 @@ pipeline {
             }
         }   
 
-        stage('Publish and Upload SBOM to Dependency-Track') {
-            steps {
-                script {
-                    uploadSbomToDependencyTrack(
-                        sbomFile: 'target/bom.xml',
-                        projectName: "${params.ECR_REPO_NAME}",
-                        projectVersion: "${env.COMMIT_SHA}",
-                        dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
-                        secretName: 'my-app/secrets'
-                    )
-                }
-            }
-        }
+        // stage('Publish and Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         script {
+        //             uploadSbomToDependencyTrack(
+        //                 sbomFile: 'target/bom.xml',
+        //                 projectName: "${params.ECR_REPO_NAME}",
+        //                 projectVersion: "${env.COMMIT_SHA}",
+        //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+        //                 secretName: 'my-app/secrets'
+        //             )
+        //         }
+        //     }
+        // }
 
         stage('Prepare Trivy Template') {
             steps {
@@ -94,31 +94,31 @@ pipeline {
             }
         }
 
-        // stage('SonarQube Analysis') {
-        //     steps {
-        //         script {
-        //             sonarScan(
-        //                 projectKey: 'Java-App',
-        //                 sources: 'src/main/java,src/test/java',
-        //                 binaries: 'target/classes',
-        //                 exclusions: '**/*.js',
-        //                 scannerTool: 'sonar-scanner',
-        //                 sonarEnv: 'sonar-server'
-        //             )
-        //         }
-        //     }
-        // }
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    sonarScan(
+                        projectKey: 'Java-App',
+                        sources: 'src/main/java,src/test/java',
+                        binaries: 'target/classes',
+                        exclusions: '**/*.js',
+                        scannerTool: 'sonar-scanner',
+                        sonarEnv: 'sonar-server'
+                    )
+                }
+            }
+        }
 
-        // stage('SonarQube Quality Gate') {
-        //     steps {
-        //         script {
-        //             sonarQualityGateCheck(
-        //                 qualityGateToken: 'sonar-token',
-        //                 timeoutMinutes: 5
-        //             )
-        //         }
-        //     }
-        // }
+        stage('SonarQube Quality Gate') {
+            steps {
+                script {
+                    sonarQualityGateCheck(
+                        secretName: 'my-app/secrets',
+                        timeoutMinutes: 5
+                    )
+                }
+            }
+        }
 
         stage('Build Docker Image') {
             steps {

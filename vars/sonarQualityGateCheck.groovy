@@ -1,6 +1,10 @@
 def call(Map config = [:]) {
-    def qualityGateToken = config.qualityGateToken ?: 'sonar-token'
+    
     def timeoutMinutes = config.timeoutMinutes ?: 5
+    def secretName = config.secretName ?: error("Missing 'secretName'")
+
+    def secrets = getAwsSecret(secretName, 'ap-south-1')
+    def qualityGateToken = secrets.sonar_token
 
     script {
         timeout(time: timeoutMinutes, unit: 'MINUTES') {
