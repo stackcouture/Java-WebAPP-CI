@@ -34,6 +34,12 @@ pipeline {
             }
         }
 
+        stage('Check AWS Identity') {
+            steps {
+                sh 'aws sts get-caller-identity'
+            }
+        }
+
         stage('Checkout Code') {
             steps {
                 script {
@@ -56,19 +62,19 @@ pipeline {
             }
         }   
 
-        stage('Publish and Upload SBOM to Dependency-Track') {
-            steps {
-                script {
-                    uploadSbomToDependencyTrack(
-                        sbomFile: 'target/bom.xml',
-                        projectName: "${params.ECR_REPO_NAME}",
-                        projectVersion: "${env.COMMIT_SHA}",
-                        dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
-                        credentialsId: 'dependency-track-api-key'
-                    )
-                }
-            }
-        }
+        // stage('Publish and Upload SBOM to Dependency-Track') {
+        //     steps {
+        //         script {
+        //             uploadSbomToDependencyTrack(
+        //                 sbomFile: 'target/bom.xml',
+        //                 projectName: "${params.ECR_REPO_NAME}",
+        //                 projectVersion: "${env.COMMIT_SHA}",
+        //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+        //                 credentialsId: 'dependency-track-api-key'
+        //             )
+        //         }
+        //     }
+        // }
 
         stage('Prepare Trivy Template') {
             steps {
@@ -163,11 +169,11 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
-            steps {
-                deployApp()
-            }
-        }
+        // stage('Deploy') {
+        //     steps {
+        //         deployApp()
+        //     }
+        // }
 
         // stage('Security Scans After Push') {
         //     parallel {
