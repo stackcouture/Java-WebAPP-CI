@@ -1,23 +1,22 @@
-def call(String stageName, String imageTag, String ecrRepoName, String awsAccountId, String region) {
-    
+def call(Map config = [:]) {
+
+    def imageTag = config.imageTag ?: error("Missing 'stageName'")
+    def ecrRepoName = config.ecrRepoName ?: error("Missing 'imageTag'")
+    def awsAccountId = config.awsAccountId ?: error("Missing 'awsAccountId'")
+    def region = config.region ?: error("Missing 'region'")
+    def secretName = config.secretName ?: error("Missing 'secretName'")
+
     def fullTag = "${awsAccountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepoName}:${imageTag}"
-    
-    withCredentials([[
-        $class: 'AmazonWebServicesCredentialsBinding',
-        credentialsId: 'aws-jenkins-creds',
-        accessKeyVariable: 'AWS_ACCESS_KEY_ID',
-        secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
-    ]]) {
-        script {
-            sh """
-                aws configure set aws_access_key_id \$AWS_ACCESS_KEY_ID
-                aws configure set aws_secret_access_key \$AWS_SECRET_ACCESS_KEY
-                
-                aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${awsAccountId}.dkr.ecr.${region}.amazonaws.com
-                
-                docker tag ${ecrRepoName}:${imageTag} ${fullTag}
-                docker push ${fullTag}
-            """
-        }
-    }
+
+    // def secrets = getAwsSecret(secretName, 'ap-south-1')
+    // def AWS_ACCESS_KEY_ID = secrets.AWS_ACCESS_KEY_ID
+    // def AWS_SECRET_ACCESS_KEY = secrets.AWS_SECRET_ACCESS_KEY
+
+    sh """
+        
+        aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${awsAccountId}.dkr.ecr.${region}.amazonaws.com
+        
+        docker tag ${ecrRepoName}:${imageTag} ${fullTag}
+        docker push ${fullTag}
+    """
 }

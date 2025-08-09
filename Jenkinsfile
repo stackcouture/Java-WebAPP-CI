@@ -94,31 +94,31 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-                    sonarScan(
-                        projectKey: 'Java-App',
-                        sources: 'src/main/java,src/test/java',
-                        binaries: 'target/classes',
-                        exclusions: '**/*.js',
-                        scannerTool: 'sonar-scanner',
-                        sonarEnv: 'sonar-server'
-                    )
-                }
-            }
-        }
+        // stage('SonarQube Analysis') {
+        //     steps {
+        //         script {
+        //             sonarScan(
+        //                 projectKey: 'Java-App',
+        //                 sources: 'src/main/java,src/test/java',
+        //                 binaries: 'target/classes',
+        //                 exclusions: '**/*.js',
+        //                 scannerTool: 'sonar-scanner',
+        //                 sonarEnv: 'sonar-server'
+        //             )
+        //         }
+        //     }
+        // }
 
-        stage('SonarQube Quality Gate') {
-            steps {
-                script {
-                    sonarQualityGateCheck(
-                        secretName: 'my-app/secrets',
-                        timeoutMinutes: 5
-                    )
-                }
-            }
-        }
+        // stage('SonarQube Quality Gate') {
+        //     steps {
+        //         script {
+        //             sonarQualityGateCheck(
+        //                 secretName: 'my-app/secrets',
+        //                 timeoutMinutes: 5
+        //             )
+        //         }
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
@@ -128,37 +128,83 @@ pipeline {
             }
         }
 
-        // stage('Security Scans Before Push') {
-        //     parallel {
-        //         stage('Trivy Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 script {
-        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-        //                     runTrivyScanUnified("before-push", localTag, "image")
-        //                 }
-        //             }
-        //         }
-        //         stage('Snyk Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 script {
-        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-        //                     runSnykScan("before-push", localTag)
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Security Scans Before Push') {
+            parallel {
+                stage('Trivy Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runTrivyScanUnified("before-push", localTag, "image")
+                        }
+                    }
+                }
+                stage('Snyk Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runSnykScan(
+                                stageName: "before-push",
+                                imageTag: localTag,
+                                secretName: 'my-app/secrets'
+                            )
+                           // runSnykScan("before-push", localTag)
+                        }
+                    }
+                }
+            }
+        }
 
         stage('Docker Push') {
             steps {
                 script {
-                    dockerPush("docker-push", "${env.COMMIT_SHA}", params.ECR_REPO_NAME, params.AWS_ACCOUNT_ID, "${env.REGION}")
+                    dockerPush(
+                        imageTag: "${env.COMMIT_SHA}",
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
+                        region: "${env.REGION}",
+                        secretName: 'my-app/secrets'
+                    )
+                  //  dockerPush("docker-push", "${env.COMMIT_SHA}", params.ECR_REPO_NAME, params.AWS_ACCOUNT_ID, "${env.REGION}")
+                }
+            }
+        }
+
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                     options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            runTrivyScanUnified("after-push", pushedTag, "image")
+                        }
+                    }
+                }
+                stage('Snyk After Push') {
+                     options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        script {
+                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                            retry(2) {
+                                runSnykScan(
+                                    stageName: "after-push",
+                                    imageTag: pushedTag,
+                                    secretName: 'my-app/secrets'
+                                )
+                                //runSnykScan("after-push", pushedTag)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -166,35 +212,6 @@ pipeline {
         // stage('Deploy') {
         //     steps {
         //         deployApp()
-        //     }
-        // }
-
-        // stage('Security Scans After Push') {
-        //     parallel {
-        //         stage('Trivy After Push') {
-        //              options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 script {
-        //                     def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-        //                     runTrivyScanUnified("after-push", pushedTag, "image")
-        //                 }
-        //             }
-        //         }
-        //         stage('Snyk After Push') {
-        //              options {
-        //                 timeout(time: 15, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 script {
-        //                     def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-        //                     retry(2) {
-        //                         runSnykScan("after-push", pushedTag)
-        //                     }
-        //                 }
-        //             }
-        //         }
         //     }
         // }
 
