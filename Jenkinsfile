@@ -163,6 +163,12 @@ pipeline {
             }
         }
 
+        stage('Deploy') {
+            steps {
+                deployApp()
+            }
+        }
+
         // stage('Security Scans After Push') {
         //     parallel {
         //         stage('Trivy After Push') {
