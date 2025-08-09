@@ -1,6 +1,6 @@
 def call(Map config = [:]) {
 
-    def projectName = config.imageTag ?: error("Missing 'projectName'")
+    def projectName = config.projectName ?: error("Missing 'projectName'")
     def gitSha = config.gitSha ?: error("Missing 'gitSha'")
     def buildNumber = config.buildNumber ?: error("Missing 'buildNumber'")
     def trivyHtmlPath = config.trivyHtmlPath ?: error("Missing 'trivyHtmlPath'")
