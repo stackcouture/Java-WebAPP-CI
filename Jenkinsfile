@@ -232,7 +232,7 @@ pipeline {
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
 
                         runGptSecuritySummary(
-                            projectName: "my-app", 
+                            projectName: "Java-App", 
                             gitSha: "${env.COMMIT_SHA}",
                             buildNumber: "${env.BUILD_NUMBER}",
                             trivyHtmlPath: trivyHtmlPath,

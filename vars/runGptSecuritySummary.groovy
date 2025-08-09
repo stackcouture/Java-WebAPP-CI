@@ -1,11 +1,10 @@
 def call(Map config = [:]) {
-
-    def projectName = config.projectName ?: error("Missing 'projectName'")
+    def projectKey = config.projectKey ?: error("Missing 'projectKey'")
     def gitSha = config.gitSha ?: error("Missing 'gitSha'")
     def buildNumber = config.buildNumber ?: error("Missing 'buildNumber'")
     def trivyHtmlPath = config.trivyHtmlPath ?: error("Missing 'trivyHtmlPath'")
     def snykJsonPath = config.snykJsonPath ?: error("Missing 'snykJsonPath'")
-    def sonarHost = config.sonarHost 
+    def sonarHost = config.sonarHost ?: error("Missing 'sonarHost'")
     def secretName = config.secretName ?: error("Missing 'secretName'")
 
     def secrets = getAwsSecret(secretName, 'ap-south-1')
@@ -32,7 +31,7 @@ def call(Map config = [:]) {
         snykStatus = "OK"
     }
 
-    def sonarSummary = getSonarQubeSummary()
+    def sonarSummary = getSonarQubeSummary(sonarHost, projectKey)
     def sonarCodeSmellsSummary = sonarSummary.sonarCodeSmellsSummary
     def sonarVulnerabilitiesSummary = sonarSummary.sonarVulnerabilitiesSummary
 
@@ -247,9 +246,9 @@ def parseStatusBadge(String gptContent) {
     return [statusText, badgeColor, badgeClass]
 }
 
-def getSonarQubeSummary() {
-    def projectKey = "Java-App"
-    def sonarHost = ${sonarHost}
+def getSonarQubeSummary(String sonarHost, String projectKey) {
+    // def projectKey = "Java-App"
+    // def sonarHost = sonarHost
     def apiQualityGateUrl = "${sonarHost}/api/qualitygates/project_status?projectKey=${projectKey}"
     def apiIssuesUrl = "${sonarHost}/api/issues/search?componentKeys=${projectKey}&types=CODE_SMELL,VULNERABILITY&ps=100"
 
