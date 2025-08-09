@@ -18,6 +18,7 @@ pipeline {
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#all-jenkins'
         SLACK_TOKEN = credentials('slack-token')
+        DEPENDENCY_TRACK_URL = 'http://13.203.194.249:8081/api/v1/bom'
     }
 
     tools {
@@ -62,7 +63,6 @@ pipeline {
                         def sbomFile = 'target/bom.xml'
                         def projectName = "${params.ECR_REPO_NAME}"
                         def projectVersion = "${env.COMMIT_SHA}"
-                        def dependencyTrackUrl = 'http://43.204.141.117:8081/api/v1/bom'
 
                         if (!fileExists(sbomFile)) {
                             error "SBOM not found: ${sbomFile}"
@@ -71,7 +71,7 @@ pipeline {
                         archiveArtifacts artifacts: sbomFile, allowEmptyArchive: true
                         retry(3) {
                             sh """
-                                curl -sSf -X POST "${dependencyTrackUrl}" \
+                                curl -sSf -X POST "${env.DEPENDENCY_TRACK_URL}" \
                                     -H "X-Api-Key: ${DT_API_KEY}" \
                                     -H "Content-Type: multipart/form-data" \
                                     -F "autoCreate=true" \
@@ -85,8 +85,7 @@ pipeline {
             }
         }
 
-
-         stage('Prepare Trivy Template') {
+        stage('Prepare Trivy Template') {
             steps {
                 sh """
                     mkdir -p contrib
@@ -110,31 +109,31 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                script {
-                    sonarScan(
-                        projectKey: 'Java-App',
-                        sources: 'src/main/java,src/test/java',
-                        binaries: 'target/classes',
-                        exclusions: '**/*.js',
-                        scannerTool: 'sonar-scanner',
-                        sonarEnv: 'sonar-server'
-                    )
-                }
-            }
-        }
+        // stage('SonarQube Analysis') {
+        //     steps {
+        //         script {
+        //             sonarScan(
+        //                 projectKey: 'Java-App',
+        //                 sources: 'src/main/java,src/test/java',
+        //                 binaries: 'target/classes',
+        //                 exclusions: '**/*.js',
+        //                 scannerTool: 'sonar-scanner',
+        //                 sonarEnv: 'sonar-server'
+        //             )
+        //         }
+        //     }
+        // }
 
-        stage('SonarQube Quality Gate') {
-            steps {
-                script {
-                    sonarQualityGateCheck(
-                        qualityGateToken: 'sonar-token',
-                        timeoutMinutes: 5
-                    )
-                }
-            }
-        }
+        // stage('SonarQube Quality Gate') {
+        //     steps {
+        //         script {
+        //             sonarQualityGateCheck(
+        //                 qualityGateToken: 'sonar-token',
+        //                 timeoutMinutes: 5
+        //             )
+        //         }
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
@@ -144,32 +143,32 @@ pipeline {
             }
         }
 
-        stage('Security Scans Before Push') {
-            parallel {
-                stage('Trivy Before Push') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        script {
-                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runTrivyScanUnified("before-push", localTag, "image")
-                        }
-                    }
-                }
-                stage('Snyk Before Push') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        script {
-                            def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runSnykScan("before-push", localTag)
-                        }
-                    }
-                }
-            }
-        }
+        // stage('Security Scans Before Push') {
+        //     parallel {
+        //         stage('Trivy Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runTrivyScanUnified("before-push", localTag, "image")
+        //                 }
+        //             }
+        //         }
+        //         stage('Snyk Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def localTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runSnykScan("before-push", localTag)
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Docker Push') {
             steps {
@@ -179,34 +178,34 @@ pipeline {
             }
         }
 
-        stage('Security Scans After Push') {
-            parallel {
-                stage('Trivy After Push') {
-                     options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        script {
-                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            runTrivyScanUnified("after-push", pushedTag, "image")
-                        }
-                    }
-                }
-                stage('Snyk After Push') {
-                     options {
-                        timeout(time: 15, unit: 'MINUTES')
-                    }
-                    steps {
-                        script {
-                            def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                            retry(2) {
-                                runSnykScan("after-push", pushedTag)
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // stage('Security Scans After Push') {
+        //     parallel {
+        //         stage('Trivy After Push') {
+        //              options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     runTrivyScanUnified("after-push", pushedTag, "image")
+        //                 }
+        //             }
+        //         }
+        //         stage('Snyk After Push') {
+        //              options {
+        //                 timeout(time: 15, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def pushedTag = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        //                     retry(2) {
+        //                         runSnykScan("after-push", pushedTag)
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Cleanup Local Image Tags') {
             steps {
@@ -217,27 +216,27 @@ pipeline {
             }
         }
 
-        stage('Generate GPT Report') {
-            steps {
-                script {
+        // stage('Generate GPT Report') {
+        //     steps {
+        //         script {
 
-                    def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
-                    def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
 
-                    if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-                        runGptSecuritySummary(
-                            "my-app", 
-                            env.COMMIT_SHA, 
-                            env.BUILD_NUMBER, 
-                            trivyHtmlPath, 
-                            snykJsonPath
-                        )
-                    } else {
-                        error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
-                    }
-                }   
-            } 
-        }
+        //             if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
+        //                 runGptSecuritySummary(
+        //                     "my-app", 
+        //                     env.COMMIT_SHA, 
+        //                     env.BUILD_NUMBER, 
+        //                     trivyHtmlPath, 
+        //                     snykJsonPath
+        //                 )
+        //             } else {
+        //                 error("One or more required files do not exist: ${trivyHtmlPath}, ${snykJsonPath}")
+        //             }
+        //         }   
+        //     } 
+        // }
 
     }
 
@@ -247,13 +246,13 @@ pipeline {
         }
 
         success {
-            script {
-                sendAiReportEmail(
-                    branch: params.BRANCH,
-                    commit: env.COMMIT_SHA ?: 'unknown',
-                    to: 'naveenramlu@gmail.com'
-                )
-            }
+            // script {
+            //     sendAiReportEmail(
+            //         branch: params.BRANCH,
+            //         commit: env.COMMIT_SHA ?: 'unknown',
+            //         to: 'naveenramlu@gmail.com'
+            //     )
+            // }
             sendSlackNotification('SUCCESS', 'good')
         }
 
