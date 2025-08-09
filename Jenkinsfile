@@ -18,7 +18,7 @@ pipeline {
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#all-jenkins'
         SLACK_TOKEN = credentials('slack-token')
-        DEPENDENCY_TRACK_URL = 'http://13.203.194.249:8081/api/v1/bom'
+        DEPENDENCY_TRACK_URL = 'http://65.0.179.180:8081/api/v1/bom'
     }
 
     tools {
