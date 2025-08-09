@@ -56,19 +56,19 @@ pipeline {
             }
         }   
 
-        // stage('Publish and Upload SBOM to Dependency-Track') {
-        //     steps {
-        //         script {
-        //             uploadSbomToDependencyTrack(
-        //                 sbomFile: 'target/bom.xml',
-        //                 projectName: "${params.ECR_REPO_NAME}",
-        //                 projectVersion: "${env.COMMIT_SHA}",
-        //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
-        //                 credentialsId: 'dependency-track-api-key'
-        //             )
-        //         }
-        //     }
-        // }
+        stage('Publish and Upload SBOM to Dependency-Track') {
+            steps {
+                script {
+                    uploadSbomToDependencyTrack(
+                        sbomFile: 'target/bom.xml',
+                        projectName: "${params.ECR_REPO_NAME}",
+                        projectVersion: "${env.COMMIT_SHA}",
+                        dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+                        secretName: 'my-app/secrets'
+                    )
+                }
+            }
+        }
 
         stage('Prepare Trivy Template') {
             steps {
