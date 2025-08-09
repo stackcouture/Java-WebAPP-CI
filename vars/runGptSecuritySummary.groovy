@@ -49,7 +49,7 @@ def call(Map config = [:]) {
     - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
 
     Context:
-    Project: ${projectName}
+    Project: ${projectKey}
     Commit SHA: ${gitSha}
     Build Number: ${buildNumber}
 
