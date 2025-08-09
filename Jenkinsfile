@@ -34,16 +34,10 @@ pipeline {
             }
         }
 
-        stage('Check AWS Identity') {
-            steps {
-                sh 'aws sts get-caller-identity'
-            }
-        }
-
         stage('Checkout Code') {
             steps {
                 script {
-                    checkoutGit(params.BRANCH, env.GIT_URL) 
+                    checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets') 
                 }
             }
         }
