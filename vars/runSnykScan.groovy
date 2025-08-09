@@ -12,6 +12,10 @@ def call(Map config = [:]) {
     def secrets = getAwsSecret(secretName, 'ap-south-1')
     def SNYK_TOKEN = secrets.SNYK_TOKEN
 
+    echo ${SNYK_TOKEN}
+    echo ${imageTag}
+    echo ${stageName}
+
     sh """
         mkdir -p '${reportDir}'
 
