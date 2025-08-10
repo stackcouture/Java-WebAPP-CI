@@ -16,8 +16,7 @@ pipeline {
     environment {
         REGION = 'ap-south-1'
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
-        SLACK_CHANNEL = '#all-jenkins'
-        SLACK_TOKEN = credentials('slack-token')
+        SLACK_CHANNEL = '#app-demo'
         DEPENDENCY_TRACK_URL = 'http://65.0.179.180:8081/api/v1/bom'
         SONAR_HOST = "http://35.154.183.6:9000"
     }
@@ -131,24 +130,42 @@ pipeline {
         }
 
         success {
-            sendSlackNotification('SUCCESS', 'good')
+            script {
+                sendSlackNotification(
+                    status: 'SUCCESS',
+                    color: 'good',
+                    secretName: 'my-app/secrets'
+                )
+            }
         }
 
         failure {
             script {
-                sendSlackNotification('FAILURE', 'danger')
+                sendSlackNotification(
+                    status: 'FAILURE',
+                    color: 'danger',
+                    secretName: 'my-app/secrets'
+                )
             }
         }
 
         unstable {
             script {
-                sendSlackNotification('UNSTABLE', 'warning')
+                sendSlackNotification(
+                    status: 'UNSTABLE',
+                    color: 'warning',
+                    secretName: 'my-app/secrets'
+                )
             }
         }
 
         aborted {
             script {
-                sendSlackNotification('ABORTED', '#808080')
+                sendSlackNotification(
+                    status: 'ABORTED',
+                    color: '#808080',
+                    secretName: 'my-app/secrets'
+                )
             }
         }
 
