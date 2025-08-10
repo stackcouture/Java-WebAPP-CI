@@ -11,6 +11,8 @@ def call(Map config = [:]) {
         """
 
         dir(repoDir) {
+
+            echo "The branch tag: ${imageTag}";
             sh "git checkout ${branch}"
 
             def fileExists = fileExists("java-app-chart/values.yaml")
