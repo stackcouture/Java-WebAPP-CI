@@ -116,10 +116,14 @@ pipeline {
 
         stage('Cleanup Local Image Tags') {
             steps {
-                sh """
-                    docker rmi ${params.ECR_REPO_NAME}:${env.COMMIT_SHA} || true
-                    docker rmi ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA} || true
-                """
+                script {
+                    cleanupDockerImages(
+                        imageTag: env.COMMIT_SHA,
+                        repoName: params.ECR_REPO_NAME,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
+                        region: env.REGION
+                    )
+                }
             }
         }
     }
