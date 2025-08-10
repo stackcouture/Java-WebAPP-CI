@@ -10,9 +10,38 @@ def call(Map config = [:]) {
             git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/stackcouture/Java-WebAPP-CD.git ${repoDir}
         """
 
-        dir(repoDir) {
+        // dir(repoDir) {
 
-            echo "The branch tag: ${imageTag}";
+        //     echo "The branch tag: ${imageTag}";
+        //     sh "git checkout ${branch}"
+
+        //     def fileExists = fileExists("java-app-chart/values.yaml")
+        //     if (!fileExists) {
+        //         error("File java-app-chart/values.yaml not found in branch ${branch}")
+        //     }
+
+        //     // Update the image tag using sed
+        //     sh """
+        //         sed -i -E "s|(^\\s*tag:\\s*\\\").*(\\\")|\\1${imageTag}\\2|" java-app-chart/values.yaml
+        //     """
+
+        //     // Commit and push changes if any
+        //     sh 'git config user.email "stackcouture@gmail.com"'
+        //     sh 'git config user.name "Naveen"'
+        //     sh 'git add java-app-chart/values.yaml'
+
+        //     def changes = sh(script: 'git diff --cached --exit-code || echo "changed"', returnStdout: true).trim()
+        //     if (changes == "changed") {
+        //         echo "Changes detected — committing and pushing."
+        //         sh "git commit -m 'chore: update image tag to ${imageTag}'"
+        //         sh "git push origin ${branch}"
+        //     } else {
+        //         echo "No changes detected — skipping commit."
+        //     }
+        // }
+
+        dir(repoDir) {
+            echo "The branch tag: ${imageTag}"
             sh "git checkout ${branch}"
 
             def fileExists = fileExists("java-app-chart/values.yaml")
@@ -20,24 +49,32 @@ def call(Map config = [:]) {
                 error("File java-app-chart/values.yaml not found in branch ${branch}")
             }
 
-            // Update the image tag using sed
+            // Extract current tag from values.yaml
+            def currentTag = sh(
+                script: "grep 'tag:' java-app-chart/values.yaml | sed -E 's/^\\s*tag:\\s*\\\"(.*)\\\"/\\1/'",
+                returnStdout: true
+            ).trim()
+
+            echo "Current tag in values.yaml: ${currentTag}"
+
+            if (currentTag == imageTag) {
+                echo "Image tag is already up to date — skipping update and commit."
+                return
+            }
+
+            echo "Updating image tag from ${currentTag} to ${imageTag}"
+
+            // Apply the sed command
             sh """
                 sed -i -E "s|(^\\s*tag:\\s*\\\").*(\\\")|\\1${imageTag}\\2|" java-app-chart/values.yaml
             """
 
-            // Commit and push changes if any
+            // Commit and push changes
             sh 'git config user.email "stackcouture@gmail.com"'
             sh 'git config user.name "Naveen"'
             sh 'git add java-app-chart/values.yaml'
-
-            def changes = sh(script: 'git diff --cached --exit-code || echo "changed"', returnStdout: true).trim()
-            if (changes == "changed") {
-                echo "Changes detected — committing and pushing."
-                sh "git commit -m 'chore: update image tag to ${imageTag}'"
-                sh "git push origin ${branch}"
-            } else {
-                echo "No changes detected — skipping commit."
-            }
+            sh "git commit -m 'chore: update image tag to ${imageTag}'"
+            sh "git push origin ${branch}"
         }
     }
 }

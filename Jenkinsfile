@@ -213,18 +213,18 @@ pipeline {
         //     }
         // }
 
-        stage('Confirm YAML Update') {
-            steps {
-                script {
-                    def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
-                        choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
-                    ]
-                    if (confirm == 'No') {
-                        error 'Aborted by user.'
-                    }
-                }
-            }
-        }
+        // stage('Confirm YAML Update') {
+        //     steps {
+        //         script {
+        //             def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
+        //                 choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
+        //             ]
+        //             if (confirm == 'No') {
+        //                 error 'Aborted by user.'
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Update File - FINAL') {
             steps {
