@@ -18,7 +18,7 @@ def call(Map config = [:]) {
     wrap([$class: 'BuildUser']) {
         slackSend(
             channel: env.SLACK_CHANNEL,
-            token: slackToken,   // no ${} here
+            token: slackToken,   
             color: color,
             message: """\
                 *${emojiMap[status] ?: status}*
