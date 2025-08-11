@@ -277,7 +277,7 @@ pipeline {
                 sendSlackNotification(
                     status: 'SUCCESS',
                     color: 'good',
-                    channel: env.SLACK_CHANNEL 
+                    channel: env.SLACK_CHANNEL,
                     secretName: 'my-app/secrets'
                 )
             }
@@ -289,7 +289,7 @@ pipeline {
                 sendSlackNotification(
                     status: 'FAILURE',
                     color: 'danger',
-                    channel: env.SLACK_CHANNEL 
+                    channel: env.SLACK_CHANNEL,
                     secretName: 'my-app/secrets'
                 )
             }
@@ -301,7 +301,7 @@ pipeline {
                 sendSlackNotification(
                     status: 'UNSTABLE',
                     color: 'warning',
-                    channel: env.SLACK_CHANNEL 
+                    channel: env.SLACK_CHANNEL,
                     secretName: 'my-app/secrets'
                 )
             }
@@ -313,7 +313,7 @@ pipeline {
                 sendSlackNotification(
                     status: 'ABORTED',
                     color: '#808080',
-                    channel: env.SLACK_CHANNEL 
+                    channel: env.SLACK_CHANNEL,
                     secretName: 'my-app/secrets'
                 )
             }
