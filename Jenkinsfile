@@ -218,31 +218,31 @@ pipeline {
             }
         }
 
-        stage('Generate GPT Security Report') {
-            steps {
-                script {
+        // stage('Generate GPT Security Report') {
+        //     steps {
+        //         script {
 
-                    def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
-                    def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
 
-                    if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-                        echo "Generating GPT security report..."
-                        runGptSecuritySummary(
-                            projectKey: env.SONAR_PROJECT_KEY, 
-                            gitSha: "${env.COMMIT_SHA}",
-                            buildNumber: "${env.BUILD_NUMBER}",
-                            trivyHtmlPath: trivyHtmlPath,
-                            snykJsonPath: snykJsonPath,
-                            sonarHost: "${env.SONAR_HOST}",
-                            secretName: 'my-app/secrets'
-                        )
+        //             if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
+        //                 echo "Generating GPT security report..."
+        //                 runGptSecuritySummary(
+        //                     projectKey: env.SONAR_PROJECT_KEY, 
+        //                     gitSha: "${env.COMMIT_SHA}",
+        //                     buildNumber: "${env.BUILD_NUMBER}",
+        //                     trivyHtmlPath: trivyHtmlPath,
+        //                     snykJsonPath: snykJsonPath,
+        //                     sonarHost: "${env.SONAR_HOST}",
+        //                     secretName: 'my-app/secrets'
+        //                 )
 
-                    } else {
-                        error("Missing scan reports.")
-                    }
-                }   
-            } 
-        }
+        //             } else {
+        //                 error("Missing scan reports.")
+        //             }
+        //         }   
+        //     } 
+        // }
 
         stage('Cleanup') {
             steps {
@@ -268,11 +268,11 @@ pipeline {
         success {
             script {
                 echo "Build SUCCESS - sending reports and notifications..."
-                sendAiReportEmail(
-                    branch: params.BRANCH,
-                    commit: env.COMMIT_SHA ?: 'unknown',
-                    to: 'naveenramlu@gmail.com'
-                )
+                // sendAiReportEmail(
+                //     branch: params.BRANCH,
+                //     commit: env.COMMIT_SHA ?: 'unknown',
+                //     to: 'naveenramlu@gmail.com'
+                // )
 
                 sendSlackNotification(
                     status: 'SUCCESS',
