@@ -28,7 +28,6 @@ pipeline {
     }
 
     stages {
-
         stage('Init & Checkout') {
             steps {
                 echo "Cleaning workspace..."
