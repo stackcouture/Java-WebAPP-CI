@@ -2,7 +2,7 @@ def call(Map config = [:]) {
     def color = config.color ?: '#36a64f'
     def status = (config.status ?: error("Missing 'status'")).toUpperCase()
     def secretName = config.secretName ?: error("Missing 'secretName'")
-    def slackChannel = config.channel ?: "#general" // You can override this via config
+    def slackChannel = config.channel ?: "#app-demo" // You can override this via config
 
     // Get secrets from AWS
     def secrets
