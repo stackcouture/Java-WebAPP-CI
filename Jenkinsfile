@@ -17,8 +17,8 @@ pipeline {
         REGION = 'ap-south-1'
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#app-demo'
-        DEPENDENCY_TRACK_URL = 'http://65.0.179.180:8081/api/v1/bom'
-        SONAR_HOST = "http://35.154.183.6:9000"
+        DEPENDENCY_TRACK_URL = 'http://15.207.71.114:8081/api/v1/bom'
+        SONAR_HOST = "http://65.1.132.166:9000"
         SONAR_PROJECT_KEY = 'Java-App'
     }
 
@@ -31,6 +31,7 @@ pipeline {
 
         stage('Init & Checkout') {
             steps {
+                echo "Cleaning workspace..."
                 cleanWorkspace()
                 script {
                     checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
@@ -41,6 +42,7 @@ pipeline {
 
         stage('Build + Test') {
             steps {
+                echo "Building and running tests..."
                 sh 'mvn clean verify'
             }
         }
@@ -53,6 +55,7 @@ pipeline {
                             if (!fileExists('target/bom.xml')) {
                                 error "SBOM file target/bom.xml not found!"
                             }
+                            echo "Uploading SBOM to Dependency Track..."
                             uploadSbomToDependencyTrack(
                                 sbomFile: 'target/bom.xml',
                                 projectName: "${params.ECR_REPO_NAME}",
@@ -64,7 +67,11 @@ pipeline {
                     }
                 }
                 stage('Trivy FS Scan') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
                     steps {
+                        echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         runTrivyScanUnified("filesystem-scan",".", "fs")
                     }
@@ -74,6 +81,7 @@ pipeline {
 
         stage('SonarQube Analysis & Gate') {
             steps {
+                echo "Running SonarQube scan..."
                 sonarScan(
                     projectKey: env.SONAR_PROJECT_KEY,
                     sources: 'src/main/java,src/test/java',
@@ -82,6 +90,7 @@ pipeline {
                     scannerTool: 'sonar-scanner',
                     sonarEnv: 'sonar-server'
                 )
+                echo "Checking SonarQube quality gate..."
                 sonarQualityGateCheck(
                     projectKey: env.SONAR_PROJECT_KEY,
                     secretName: 'my-app/secrets',
@@ -93,6 +102,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                  script {
+                    echo "Building Docker image with tag: ${FULL_IMAGE_TAG}"
                     buildDockerImage("${params.ECR_REPO_NAME}:${env.COMMIT_SHA}")
                  }
             }
@@ -105,6 +115,7 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
+                        echo "Running Trivy scan before push..."
                         runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
                     }
                 }
@@ -113,6 +124,7 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
+                        echo "Running Snyk scan before push..."
                         runSnykScan(
                             stageName: "before-push",
                             imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
@@ -126,6 +138,7 @@ pipeline {
         stage('Docker Push') {
             steps {
                 script {
+                    echo "Pushing Docker image: ${FULL_IMAGE_TAG}"
                     dockerPush(
                         imageTag: "${env.COMMIT_SHA}",
                         ecrRepoName: params.ECR_REPO_NAME,
@@ -144,6 +157,7 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
+                        echo "Running Trivy scan after push..."
                         runTrivyScanUnified("after-push",
                             "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
                     }
@@ -154,6 +168,7 @@ pipeline {
                     }
                     steps {
                         retry(2) {
+                            echo "Running Snyk scan after push..."
                             runSnykScan(
                                 stageName: "after-push",
                                 imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
@@ -168,12 +183,8 @@ pipeline {
         stage('Confirm YAML Update') {
             steps {
                 script {
-                    def confirm = input message: 'Update deployment YAML with new Docker tag?', parameters: [
-                        choice(name: 'Confirmation', choices: ['Yes', 'No'], description: 'Proceed with update?')
-                    ]
-                    if (confirm == 'No') {
-                        error 'Aborted by user.'
-                    }
+                    def approver = confirmYamlUpdate()
+                    echo "YAML update approved by: ${approver}"
                 }
             }
         }
@@ -181,6 +192,7 @@ pipeline {
         stage('Update Deployment Files') {
             steps {
                 script {
+                    echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA}"
                     updateImageTag(
                         imageTag: env.COMMIT_SHA,
                         branch: params.BRANCH,
@@ -192,6 +204,7 @@ pipeline {
 
         stage('Deploy App') {
             steps {
+                echo "Deploying application..."
                 deployApp()
             }
         }
@@ -204,7 +217,7 @@ pipeline {
                     def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
 
                     if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-
+                        echo "Generating GPT security report..."
                         runGptSecuritySummary(
                             projectKey: env.SONAR_PROJECT_KEY, 
                             gitSha: "${env.COMMIT_SHA}",
@@ -225,6 +238,7 @@ pipeline {
         stage('Cleanup') {
             steps {
                 script {
+                    echo "Cleaning up Docker images..."
                     cleanupDockerImages(
                         imageTag: env.COMMIT_SHA,
                         repoName: params.ECR_REPO_NAME,
@@ -238,11 +252,13 @@ pipeline {
 
     post {
         always {
+            echo "Archiving test reports..."
             postBuildTestArtifacts('My Test Report', '**/surefire-report.html')
         }
 
         success {
             script {
+                echo "Build SUCCESS - sending reports and notifications..."
                 sendAiReportEmail(
                     branch: params.BRANCH,
                     commit: env.COMMIT_SHA ?: 'unknown',
@@ -259,6 +275,7 @@ pipeline {
 
         failure {
             script {
+                echo "Build FAILURE - sending failure notification..."
                 sendSlackNotification(
                     status: 'FAILURE',
                     color: 'danger',
@@ -269,6 +286,7 @@ pipeline {
 
         unstable {
             script {
+                echo "Build UNSTABLE - sending unstable notification..."
                 sendSlackNotification(
                     status: 'UNSTABLE',
                     color: 'warning',
@@ -279,6 +297,7 @@ pipeline {
 
         aborted {
             script {
+                echo "Build ABORTED - sending aborted notification..."
                 sendSlackNotification(
                     status: 'ABORTED',
                     color: '#808080',
