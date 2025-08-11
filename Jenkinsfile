@@ -36,11 +36,8 @@ pipeline {
                     echo "Calling checkoutGit..."
                     try {
                         checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
-                        echo "Checkout completed."
                         env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                        echo "Commit SHA is ${env.COMMIT_SHA}"
                     } catch (Exception e) {
-                        echo "Checkout failed with error: ${e}"
                         currentBuild.result = 'FAILURE'
                         error("Stopping pipeline due to checkout failure")
                     }
