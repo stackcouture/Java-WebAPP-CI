@@ -1,3 +1,4 @@
+@NonCPS
 def checkoutGit(String gitBranch, String gitUrl, String secretName) {
     echo "Fetching AWS secrets..."
     def secrets = getAwsSecret(secretName, 'ap-south-1')
