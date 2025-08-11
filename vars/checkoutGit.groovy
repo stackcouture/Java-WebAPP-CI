@@ -1,4 +1,4 @@
-def checkoutGit(String gitBranch, String gitUrl, String secretName) {
+def call(String gitBranch, String gitUrl, String secretName) {
     def secrets = getAwsSecret(secretName, 'ap-south-1')
     def credentialsId = secrets.github_pat
     checkout([

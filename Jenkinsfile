@@ -31,8 +31,8 @@ pipeline {
         stage('Init & Checkout') {
             steps {
                 echo "Cleaning workspace..."
-                cleanWorkspace()
-                checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
+                cleanWs()
+                checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets') // safe usage
                 script {
                     env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                 }
