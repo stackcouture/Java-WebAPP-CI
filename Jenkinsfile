@@ -32,9 +32,12 @@ pipeline {
             steps {
                 echo "Cleaning workspace..."
                 cleanWs()
-                checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets') // safe usage
                 script {
+                    echo "Calling checkoutGit..."
+                    checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
+                    echo "Checkout completed."
                     env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    echo "Commit SHA is ${env.COMMIT_SHA}"
                 }
             }
         }
