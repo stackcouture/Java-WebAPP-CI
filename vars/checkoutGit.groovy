@@ -1,11 +1,14 @@
-def call(String gitBranch, String gitUrl, String secretName) {
+def checkoutGit(String gitBranch, String gitUrl, String secretName) {
+    echo "Fetching AWS secrets..."
     def secrets = getAwsSecret(secretName, 'ap-south-1')
+    if (secrets == null || !secrets.github_pat) {
+        error("Failed to retrieve GitHub PAT from AWS secrets")
+    }
     def credentialsId = secrets.github_pat
+    echo "Using credentialsId: ${credentialsId}"
     checkout([
         $class: 'GitSCM',
         branches: [[name: "*/${gitBranch}"]],
-        userRemoteConfigs: [
-            [url: gitUrl, credentialsId: credentialsId]
-        ]
+        userRemoteConfigs: [[url: gitUrl, credentialsId: credentialsId]]
     ])
 }
