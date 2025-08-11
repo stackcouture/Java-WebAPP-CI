@@ -1,5 +1,5 @@
-@NonCPS
-def checkoutGit(String gitBranch, String gitUrl, String secretName) {
+// vars/checkoutGit.groovy
+def call(String gitBranch, String gitUrl, String secretName) {
     echo "Fetching AWS secrets..."
     def secrets = getAwsSecret(secretName, 'ap-south-1')
     if (secrets == null || !secrets.github_pat) {
@@ -7,6 +7,7 @@ def checkoutGit(String gitBranch, String gitUrl, String secretName) {
     }
     def credentialsId = secrets.github_pat
     echo "Using credentialsId: ${credentialsId}"
+
     checkout([
         $class: 'GitSCM',
         branches: [[name: "*/${gitBranch}"]],
