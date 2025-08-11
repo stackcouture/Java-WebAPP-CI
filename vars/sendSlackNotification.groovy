@@ -2,9 +2,9 @@ def call(Map config = [:]) {
     def color = config.color ?: '#36a64f'
     def status = (config.status ?: error("Missing 'status'")).toUpperCase()
     def secretName = config.secretName ?: error("Missing 'secretName'")
+    def slackChannel = config.channel ?: "#general" // You can override this via config
 
     // Get secrets from AWS
-
     def secrets
     try {
         secrets = getAwsSecret(secretName, 'ap-south-1')
@@ -21,23 +21,29 @@ def call(Map config = [:]) {
         ABORTED : "🛑 Deployment Aborted!"
     ]
 
-    def triggeredBy = BUILD_USER ?: "Automated"
+    // Wrap to access BUILD_USER info
+    wrap([$class: 'BuildUser']) {
+        def triggeredBy = env.BUILD_USER_ID ?: "Automated"
+        def commitSha = env.COMMIT_SHA ?: "N/A"
+        def buildUrl = env.BUILD_URL ?: "#"
+        def jobName = env.JOB_NAME ?: "N/A"
+        def buildNumber = env.BUILD_NUMBER ?: "N/A"
+        def branch = params.BRANCH ?: env.GIT_BRANCH ?: "N/A"
 
-     wrap([$class: 'BuildUser']) {
         slackSend(
             channel: slackChannel,
             token: slackToken,
             color: color,
             message: """\
                 *${emojiMap[status] ?: status}*
-                *Project:* `${env.JOB_NAME}`
-                *Commit:* `${env.COMMIT_SHA ?: 'N/A'}`
-                *Build Number:* #${env.BUILD_NUMBER}
-                *Branch:* `${params.BRANCH ?: 'N/A'}`
+                *Project:* `${jobName}`
+                *Commit:* `${commitSha}`
+                *Build Number:* #${buildNumber}
+                *Branch:* `${branch}`
                 *Triggered By:* ${triggeredBy} 👤
-                *Build Link:* <${env.BUILD_URL}|Click to view in Jenkins>
+                *Build Link:* <${buildUrl}|Click to view in Jenkins>
                 _This is an automated notification from Jenkins 🤖_
                 """.stripIndent().trim()
-            )
+        )
     }
 }

@@ -6,7 +6,6 @@ def call(String gitBranch, String gitUrl, String secretName) {
         error("Failed to retrieve GitHub PAT from AWS secrets")
     }
     def credentialsId = secrets.github_pat
-    echo "Using credentialsId: ${credentialsId}"
 
     checkout([
         $class: 'GitSCM',

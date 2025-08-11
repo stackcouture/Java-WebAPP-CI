@@ -10,6 +10,10 @@ def call(Map config = [:]) {
     def secrets = getAwsSecret(secretName, 'ap-south-1')
     def openai_api_key = secrets.openai_api_key
 
+    if (!openai_api_key) {
+        error("OpenAI API key is missing from secrets. Please check the secret: ${secretName}")
+    }
+
     def trivyJsonPath = trivyHtmlPath.replace(".html", ".json")
     def trivySummary = extractTopVulns(trivyJsonPath, "Trivy")
     def snykSummary = extractTopVulns(snykJsonPath, "Snyk")
@@ -26,8 +30,8 @@ def call(Map config = [:]) {
         snykLower.contains("no medium")
     ) ? "OK" : "Issues Found"
 
-    if (!snykSummary?.trim()) {
-        snykSummary = "No high or critical vulnerabilities found by Snyk."
+    if (!snykSummary?.trim() || snykSummary.contains("JSON file not found or is empty")) {
+        snykSummary = "No high, critical or medium vulnerabilities found by Snyk."
         snykStatus = "OK"
     }
 
@@ -44,9 +48,7 @@ def call(Map config = [:]) {
     - Project Overview (project name, SHA, build number)
     - Vulnerabilities Summary (grouped by severity: Critical, High, Medium)
     - Code Smells Summary
-    - License Issues (e.g., GPL, AGPL, LGPL)
-    - Recommendations (2–4 practical points)
-    - One line with: <p><strong>Status:</strong> OK</p> or <p><strong>Status:</strong> Issues Found</p>
+    - Recommendations (2–4 practical points as an unordered list)
 
     Context:
     Project: ${projectKey}
@@ -83,14 +85,11 @@ def call(Map config = [:]) {
         temperature: 0.7
     ]
 
-    if (!openai_api_key) {
-        error("OpenAI API key is missing from secrets. Please check the secret: ${secretName}")
-    }
-
     writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
 
+    def responseJson = ''
     withEnv(["OPENAI_API_KEY=${openai_api_key}"]) {
-        def responseJson = sh(script: """
+        responseJson = sh(script: """
             curl -s https://api.openai.com/v1/chat/completions \\
                 -H "Authorization: Bearer \$OPENAI_API_KEY" \\
                 -H "Content-Type: application/json" \\
@@ -204,7 +203,8 @@ def call(Map config = [:]) {
         </html>
         """
         writeFile file: gptReportFile, text: htmlContent
-        echo "AI-powered GPT report generated: ${gptReportFile}"
+
+        archiveArtifacts artifacts: gptReportFile, fingerprint: true
     } catch (Exception e) {
         error("Failed to parse or process the GPT response: ${e.getMessage()}")
     }
