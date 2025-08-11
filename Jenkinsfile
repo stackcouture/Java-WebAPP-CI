@@ -102,7 +102,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                  script {
-                    echo "Building Docker image with tag: ${FULL_IMAGE_TAG}"
+                    echo "Building Docker image with tag: ${env.COMMIT_SHA}"
                     buildDockerImage("${params.ECR_REPO_NAME}:${env.COMMIT_SHA}")
                  }
             }
