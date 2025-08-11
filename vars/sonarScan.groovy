@@ -9,14 +9,22 @@ def call(Map config = [:]) {
     env.SONAR_PROJECT_KEY = projectKey
 
     script {
-        def scannerHome = tool scannerTool
+
+        def scannerHome
+        try {
+            scannerHome = tool scannerTool
+        } catch (e) {
+            error "[sonarScan] Failed to find scanner tool '${scannerTool}': ${e.message}"
+        }
+
         withSonarQubeEnv(sonarEnv) {
-            sh """
-                ${scannerHome}/bin/sonar-scanner \
-                    -Dsonar.projectKey=${projectKey} \
-                    -Dsonar.java.binaries=${binaries} \
-                    -Dsonar.sources=${sources} \
-                    -Dsonar.exclusions=${exclusions}
+            sh """#!/bin/bash
+                set -e
+                "${scannerHome}/bin/sonar-scanner" \\
+                    -Dsonar.projectKey="${projectKey}" \\
+                    -Dsonar.java.binaries="${binaries}" \\
+                    -Dsonar.sources="${sources}" \\
+                    -Dsonar.exclusions="${exclusions}"
             """
         }
     }

@@ -89,12 +89,14 @@ def call(Map config = [:]) {
 
     writeFile file: gptPromptFile, text: groovy.json.JsonOutput.toJson(payload)
 
-    def responseJson = sh(script: """
-        curl -s https://api.openai.com/v1/chat/completions \\
-        -H "Authorization: Bearer ${openai_api_key}" \\
-        -H "Content-Type: application/json" \\
-        -d @${gptPromptFile}
-    """, returnStdout: true).trim()
+    withEnv(["OPENAI_API_KEY=${openai_api_key}"]) {
+        def responseJson = sh(script: """
+            curl -s https://api.openai.com/v1/chat/completions \\
+                -H "Authorization: Bearer \$OPENAI_API_KEY" \\
+                -H "Content-Type: application/json" \\
+                -d @${gptPromptFile}
+        """, returnStdout: true).trim()
+    }
 
     if (!responseJson || responseJson.contains('"error"')) {
         echo "Raw response from OpenAI:\n${responseJson}"

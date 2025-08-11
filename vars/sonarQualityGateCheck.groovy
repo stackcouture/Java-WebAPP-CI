@@ -10,17 +10,25 @@ def call(Map config = [:]) {
         error "[sonarQualityGateCheck] Provided projectKey '${projectKey}' does not match scanned projectKey '${env.SONAR_PROJECT_KEY}'"
     }
 
-    def secrets = getAwsSecret(secretName, 'ap-south-1')
-    def qualityGateToken = secrets.sonar_token
+    def secrets
+        try {
+            secrets = getAwsSecret(secretName, 'ap-south-1')
+        } catch (Exception e) {
+            error "[sonarQualityGateCheck] Failed to retrieve secret '${secretName}': ${e.message}"
+        }
 
-    script {
+    def sonarToken = secrets.sonar_token ?: error("[sonarQualityGateCheck] Missing 'sonar_token' in secret '${secretName}'")
+
+    try {
         timeout(time: timeoutMinutes, unit: 'MINUTES') {
-            def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: qualityGateToken
+            def qualityGate = waitForQualityGate abortPipeline: true, credentialsId: sonarToken
             if (qualityGate.status != 'OK') {
                 error "SonarQube Quality Gate failed: ${qualityGate.status}"
             } else {
                 echo "SonarQube Quality Gate passed: ${qualityGate.status}"
             }
         }
+    } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException e) {
+        error "SonarQube Quality Gate check timed out after ${timeoutMinutes} minutes."
     }
 }

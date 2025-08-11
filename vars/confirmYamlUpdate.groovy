@@ -7,12 +7,11 @@ def call(String message = 'Update deployment YAML with new Docker tag?') {
         ]
     )
 
-    // Try to get the approver (if Jenkins security is enabled)
     def approver = 'unknown'
     try {
         def causes = currentBuild.rawBuild.getCauses()
         def inputCause = causes.find { it.class.simpleName.contains("UserIdCause") }
-        if (inputCause) {
+        if (inputCause?.getUserId()) {
             approver = inputCause.getUserId()
         }
     } catch (e) {

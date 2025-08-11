@@ -4,7 +4,6 @@ def call(Map config = [:]) {
     def ecrRepoName = config.ecrRepoName ?: error("Missing 'ecrRepoName'")
     def awsAccountId = config.awsAccountId ?: error("Missing 'awsAccountId'")
     def region = config.region ?: error("Missing 'region'")
-    def secretName = config.secretName ?: error("Missing 'secretName'")
 
     def fullTag = "${awsAccountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepoName}:${imageTag}"
 

@@ -11,6 +11,7 @@ def call(Map config = [:]) {
     def secrets = getAwsSecret(secretName, 'ap-south-1')
     def SNYK_TOKEN = secrets.SNYK_TOKEN
 
+ withEnv(["SNYK_TOKEN=${SNYK_TOKEN}"]) {
 sh """#!/bin/bash
     set -e
     mkdir -p '${reportDir}'
@@ -32,6 +33,7 @@ EOF
 
     echo "</pre></body></html>" >> '${htmlFile}'
 """
+}
 
 
     publishHTML(target: [

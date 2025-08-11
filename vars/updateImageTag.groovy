@@ -9,7 +9,12 @@ def call(Map config = [:]) {
     def gitToken = secrets.github_pat
 
     sh "rm -rf ${repoDir}"
-    sh "git clone https://${gitToken}@${repoUrl.replace('https://', '')} ${repoDir}"
+
+    withEnv(["GIT_PAT=${gitToken}"]) {
+        retry(2) {
+            sh "git clone https://\$GIT_PAT@${repoUrl.replace('https://', '')} ${repoDir}"
+        }
+    }
 
     dir(repoDir) {
         sh "git checkout ${branch}"
@@ -37,6 +42,13 @@ def call(Map config = [:]) {
         sh 'git config user.name "Naveen"'
         sh "git add java-app-chart/values.yaml"
         sh "git commit -m \"chore: update image tag to ${imageTag}\""
-        sh "git push origin ${branch}"
+
+        try {
+            sh "git push origin ${branch}"
+            def commitSha = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+            echo "Tag update pushed. Commit SHA: ${commitSha}"
+        } catch (e) {
+            error("Failed to push tag update. Reason:\n${e.message}")
+        }
     }
 }
