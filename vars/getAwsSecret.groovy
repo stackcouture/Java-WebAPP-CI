@@ -11,5 +11,5 @@ def call(String secretName, String region = 'ap-south-1') {
         label: 'Fetching secret'
     ).trim()
 
-    return readJSON text: secretJson
+    return readJSON(text: secretJson)
 }
