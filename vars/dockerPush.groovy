@@ -8,10 +8,7 @@ def call(Map config = [:]) {
 
     def fullTag = "${awsAccountId}.dkr.ecr.${region}.amazonaws.com/${ecrRepoName}:${imageTag}"
 
-    sh """
-        
-        aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${awsAccountId}.dkr.ecr.${region}.amazonaws.com
-        
+    sh """  
         docker tag ${ecrRepoName}:${imageTag} ${fullTag}
         docker push ${fullTag}
     """
