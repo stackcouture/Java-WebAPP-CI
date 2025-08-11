@@ -138,7 +138,7 @@ pipeline {
         stage('Docker Push') {
             steps {
                 script {
-                    echo "Pushing Docker image: ${FULL_IMAGE_TAG}"
+                    echo "Pushing Docker image: ${env.COMMIT_SHA}"
                     dockerPush(
                         imageTag: "${env.COMMIT_SHA}",
                         ecrRepoName: params.ECR_REPO_NAME,
