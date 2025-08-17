@@ -55,6 +55,7 @@ pipeline {
                     def reportDir = "reports/gitleaks"
                     def reportPath = "${reportDir}/${reportFileName}"
 
+                    // Run Gitleaks
                     sh """
                         curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz -o gitleaks.tar.gz
                         tar -xvf gitleaks.tar.gz
@@ -73,31 +74,36 @@ pipeline {
                     echo "[DEBUG] Listing ${reportDir} directory:"
                     sh "ls -l ${reportDir} || true"
 
-                    // IMPORTANT: Use relative path here
                     if (!fileExists(reportPath)) {
                         error "[ERROR] Gitleaks report not found at ${reportPath}"
                     }
 
-                    def jsonText = ''
-                    def leakCount = 0
-                    try {
-                        jsonText = readFile(reportPath)
-                        def json = new groovy.json.JsonSlurper().parseText(jsonText)
-                        leakCount = json.size()
-                        echo "[DEBUG] Parsed leak count: ${leakCount}"
-                    } catch (Exception e) {
-                        error "[ERROR] Failed to read or parse Gitleaks report JSON: ${e.message}"
-                    }
+                    def jsonText = readFile(reportPath)
+                    def leaks = new groovy.json.JsonSlurper().parseText(jsonText)
+                    def leakCount = leaks.size()
 
-                    // Always archive artifacts (relative path)
+                    echo "[DEBUG] Parsed leak count: ${leakCount}"
+
                     archiveArtifacts artifacts: reportPath, allowEmptyArchive: true
 
                     if (leakCount > 0) {
                         echo "🛑 Gitleaks found ${leakCount} potential secret(s)."
-                        echo "Report: ${env.BUILD_URL}artifact/${reportPath}"
-                        error "Failing build due to secret leaks."
+                        echo "📄 Report: ${env.BUILD_URL}artifact/${reportPath}"
+
+                        echo "🔍 Leaks Summary:"
+                        leaks.take(5).eachWithIndex { leak, idx ->
+                            echo """[${idx + 1}] ${leak.Description} in file ${leak.File} at line ${leak.StartLine}
+                                → Match: ${leak.Match}
+                                → Commit: ${leak.Commit}
+                                """
+                        }
+
+                        def prettyJson = groovy.json.JsonOutput.prettyPrint(jsonText)
+                        writeFile file: "${reportDir}/summary.txt", text: prettyJson
+
+                        error "Failing build due to ${leakCount} secret leak(s) found by Gitleaks."
                     } else {
-                        echo "✅ No secrets detected by Gitleaks."
+                        echo "No secrets detected by Gitleaks."
                     }
                 }
             }
