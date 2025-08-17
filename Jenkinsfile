@@ -71,6 +71,22 @@ pipeline {
 
                     def leaksFound = sh(script: "grep -i 'Secret' reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json | wc -l", returnStdout: true).trim()
                     if (leaksFound != '0') {
+
+                        def jsonText = readFile "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
+                        def json = new groovy.json.JsonSlurper().parseText(jsonText)
+                        def leakCount = json.size()
+                        def reportUrl = "${env.BUILD_URL}artifact/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
+
+                        
+                        sendSlackNotification(
+                            status: 'FAILURE',
+                            color: 'danger',
+                            channel: env.SLACK_CHANNEL,
+                            secretName: 'my-app/secrets',
+                            leakCount: leakCount,
+                            reportUrl: reportUrl,
+                            isGitleaksNotification: true
+                        )
                         error "Gitleaks found potential secrets in Git history!"
                     }
                 }
