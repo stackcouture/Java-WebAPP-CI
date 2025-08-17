@@ -85,7 +85,7 @@ pipeline {
                             secretName: 'my-app/secrets',
                             leakCount: leakCount,
                             reportUrl: reportUrl,
-                            isGitleaksNotification: true
+                            isGitleaksNotification: true as Boolean
                         )
                         error "Gitleaks found potential secrets in Git history!"
                     }
