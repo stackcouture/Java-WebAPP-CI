@@ -115,8 +115,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                  script {
-                    echo "Building Docker image with tag: ${env.COMMIT_SHA}"
-                    buildDockerImage("${params.ECR_REPO_NAME}:${env.COMMIT_SHA}")
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                    echo "Building Docker image: ${localImageTag}"
+                    buildDockerImage(localImageTag)
                  }
             }
         }
@@ -148,48 +149,41 @@ pipeline {
         //     }
         // }
 
-        stage('Docker Push') {
+        stage('Docker Push & Digest') {
             steps {
                 script {
-                    echo "Pushing Docker image: ${env.COMMIT_SHA}"
-                    fullDigestTag = dockerPush(
+                    env.FULL_DIGEST_TAG = dockerPush(
                         imageTag: "${env.COMMIT_SHA}",
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
-                        region: "${env.REGION}",
+                        region: env.REGION,
                         secretName: 'my-app/secrets'
                     )
-                    echo "Full digest-based image tag: ${fullDigestTag}"
+                    echo "Digest-based image tag: ${env.FULL_DIGEST_TAG}"
                 }
             }
         }
 
-        stage('Cosign Sign Image') {
+        stage('Cosign Sign') {
             steps {
                 withCredentials([
                     file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
                     string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
                 ]) {
                     script {
-                        cosignSignECR(
-                            fullDigestTag: fullDigestTag,
-                            awsAccountId: params.AWS_ACCOUNT_ID,
-                            region: params.REGION
-                        )
+                        cosignSignECR(fullDigestTag: env.FULL_DIGEST_TAG)
                     }
                 }
             }
         }
 
-        stage('Cosign Verify Image') {
+        stage('Cosign Verify') {
             steps {
                 withCredentials([
                     file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')
                 ]) {
                     script {
-                        cosignVerifyECR(
-                            fullDigestTag: fullDigestTag
-                        )
+                        cosignVerifyECR(fullDigestTag: env.FULL_DIGEST_TAG)
                     }
                 }
             }
