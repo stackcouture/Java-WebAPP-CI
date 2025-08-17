@@ -75,6 +75,7 @@ pipeline {
                         def jsonText = readFile "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
                         def json = new groovy.json.JsonSlurper().parseText(jsonText)
                         def leakCount = json.size()
+                        echo "[DEBUG] Parsed leaks: ${leakCount}"
                         def reportUrl = "${env.BUILD_URL}artifact/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
 
                         
