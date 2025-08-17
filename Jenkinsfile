@@ -152,44 +152,44 @@ pipeline {
             steps {
                 script {
                     echo "Pushing Docker image: ${env.COMMIT_SHA}"
-                    dockerPush(
+                    fullDigestTag = dockerPush(
                         imageTag: "${env.COMMIT_SHA}",
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: "${env.REGION}",
                         secretName: 'my-app/secrets'
                     )
+                    echo "Full digest-based image tag: ${fullDigestTag}"
                 }
             }
         }
 
-        stage('Sign Docker Image') {
+        stage('Cosign Sign Image') {
             steps {
-                withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
-                                string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
+                withCredentials([
+                    file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                    string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                ]) {
                     script {
-                        echo "Signing Docker image with Cosign: ${env.COMMIT_SHA}"
-
-                        sh """
-                            export COSIGN_EXPERIMENTAL=1
-                            export COSIGN_PASSWORD=\$COSIGN_PASSWORD
-                            cosign sign --key \$COSIGN_KEY ${env.COMMIT_SHA}
-                        """
+                        cosignSignECR(
+                            fullDigestTag: fullDigestTag,
+                            awsAccountId: params.AWS_ACCOUNT_ID,
+                            region: params.REGION
+                        )
                     }
                 }
             }
         }
 
-        stage('Verify Cosign Signature') {
+        stage('Cosign Verify Image') {
             steps {
-                withCredentials([file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')]) {
+                withCredentials([
+                    file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')
+                ]) {
                     script {
-                        echo "Verifying signature for image ${env.COMMIT_SHA}"
-
-                        sh """
-                            export COSIGN_EXPERIMENTAL=1
-                            cosign verify --key \$COSIGN_PUB ${env.COMMIT_SHA}
-                        """
+                        cosignVerifyECR(
+                            fullDigestTag: fullDigestTag
+                        )
                     }
                 }
             }
