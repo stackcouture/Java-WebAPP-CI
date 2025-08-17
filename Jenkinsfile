@@ -45,6 +45,41 @@ pipeline {
             }
         }
 
+        stage('Gitleaks Scan') {
+            options {
+                timeout(time: 5, unit: 'MINUTES')
+            }
+            steps {
+                script {
+                    echo "Running Gitleaks full scan with custom config..."
+
+                    sh '''
+                        GITLEAKS_VERSION=8.18.1
+                        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz -o gitleaks.tar.gz
+                        tar -xvf gitleaks.tar.gz
+                        chmod +x gitleaks
+
+                        mkdir -p reports/gitleaks
+
+                        ./gitleaks detect \
+                            --source . \
+                            --config my-app/secrets/gitleaks.toml \
+                            --report-format html \
+                            --report-path reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html \
+                            --verbose
+
+                        rm -f gitleaks gitleaks.tar.gz
+                    '''
+
+                    def leaksFound = sh(script: "grep -i 'Secret' reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html | wc -l", returnStdout: true).trim()
+                    if (leaksFound != '0') {
+                        error "Gitleaks found potential secrets in Git history!"
+                    }
+                }
+
+                archiveArtifacts artifacts: "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html", allowEmptyArchive: true
+            }
+        }
 
         stage('Build + Test') {
             steps {
