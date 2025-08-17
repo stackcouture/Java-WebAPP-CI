@@ -51,9 +51,11 @@ pipeline {
                 script {
                     echo "Running Gitleaks full scan with custom config..."
 
+                    // Get current commit SHA
                     env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                     echo "[DEBUG] COMMIT_SHA: ${env.COMMIT_SHA}"
 
+                    // Download and run Gitleaks
                     sh """
                         curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz -o gitleaks.tar.gz
                         tar -xvf gitleaks.tar.gz
@@ -72,17 +74,15 @@ pipeline {
                     echo "[DEBUG] Listing reports/gitleaks directory:"
                     sh 'ls -l reports/gitleaks || true'
 
-                    def workspace = pwd()
-                    def reportPath = "${workspace}/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
-                    echo "[DEBUG] Using reportPath = ${reportPath}"
-
+                    // Ensure report file exists
+                    def reportPath = "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
                     if (!fileExists(reportPath)) {
                         error "[ERROR] Gitleaks report not found at ${reportPath}"
                     }
 
+                    // Read and parse report
                     def jsonText = ''
                     def leakCount = 0
-
                     try {
                         jsonText = readFile(reportPath)
                         def json = new groovy.json.JsonSlurper().parseText(jsonText)
@@ -92,33 +92,19 @@ pipeline {
                         error "[ERROR] Failed to read or parse Gitleaks report JSON: ${e.message}"
                     }
 
-                    archiveArtifacts artifacts: "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json", allowEmptyArchive: true
+                    // Always publish the report to Jenkins
+                    archiveArtifacts artifacts: reportPath, allowEmptyArchive: true
 
                     if (leakCount > 0) {
-                        def reportUrl = "${env.BUILD_URL}artifact/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
-
-                        echo "[DEBUG] Preparing Slack notification with:"
-                        echo "        - leakCount = ${leakCount}"
-                        echo "        - reportUrl = ${reportUrl}"
-
-                        sendSlackNotification(
-                            status: 'FAILURE',
-                            color: 'danger',
-                            channel: env.SLACK_CHANNEL,
-                            secretName: 'my-app/secrets',
-                            leakCount: leakCount,
-                            reportUrl: reportUrl,
-                            isGitleaksNotification: 'true'
-                        )
-
-                        error "Gitleaks found potential secrets in Git history!"
+                        echo "🛑 Gitleaks found ${leakCount} potential secret(s)."
+                        echo "Report: ${env.BUILD_URL}artifact/${reportPath}"
+                        error "Failing build due to secret leaks."
                     } else {
                         echo "✅ No secrets detected by Gitleaks."
                     }
                 }
             }
         }
-
 
         stage('Build + Test') {
             steps {
