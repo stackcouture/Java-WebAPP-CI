@@ -1,6 +1,6 @@
 def call(Map config = [:]) {
     def imageTag = config.imageTag ?: env.COMMIT_SHA
-    def branch = config.branch ?: 'main'
+    def branch = 'main'
     def secretName = config.secretName ?: error("Missing 'secretName'")
     def repoUrl = "https://github.com/stackcouture/Java-WebAPP-CD"
     def repoDir = "Java-WebAPP-CD"
@@ -19,12 +19,12 @@ def call(Map config = [:]) {
     dir(repoDir) {
         sh "git checkout ${branch}"
 
-        if (!fileExists("java-app-chart/values.yaml")) {
-            error("File java-app-chart/values.yaml not found in branch ${branch}")
+        if (!fileExists("deploy/dev-values.yaml")) {
+            error("File deploy/dev-values.yaml not found in branch ${branch}")
         }
 
         def currentTag = sh(
-            script: "grep '^ *tag:' java-app-chart/values.yaml | awk '{print \$2}'",
+            script: "grep '^ *tag:' deploy/dev-values.yaml | awk '{print \$2}'",
             returnStdout: true
         ).trim()
 
@@ -36,11 +36,11 @@ def call(Map config = [:]) {
         }
 
         echo "Updating image tag from ${currentTag} to ${imageTag}"
-        sh "sed -i 's/^ *tag:.*/tag: ${imageTag}/' java-app-chart/values.yaml"
+        sh "sed -i 's/^ *tag:.*/tag: ${imageTag}/' deploy/dev-values.yaml"
 
         sh 'git config user.email "stackcouture@gmail.com"'
         sh 'git config user.name "Naveen"'
-        sh "git add java-app-chart/values.yaml"
+        sh "git add deploy/dev-values.yaml"
         sh "git commit -m \"chore: update image tag to ${imageTag}\""
 
         try {

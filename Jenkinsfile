@@ -201,7 +201,6 @@ pipeline {
                     echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA}"
                     updateImageTag(
                         imageTag: env.COMMIT_SHA,
-                        branch: params.BRANCH,
                         secretName: 'my-app/secrets'
                     )
                 }
