@@ -166,18 +166,20 @@ pipeline {
         stage('Sign Docker Image') {
             steps {
                 withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
-                                 string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
+                                string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
                     script {
                         echo "Signing Docker image with Cosign: ${env.COMMIT_SHA}"
 
                         sh """
                             export COSIGN_EXPERIMENTAL=1
-                            cosign sign --key \$COSIGN_KEY --password \$COSIGN_PASSWORD ${env.COMMIT_SHA}
+                            export COSIGN_PASSWORD=\$COSIGN_PASSWORD
+                            cosign sign --key \$COSIGN_KEY ${env.COMMIT_SHA}
                         """
                     }
                 }
             }
         }
+
         stage('Verify Cosign Signature') {
             steps {
                 withCredentials([file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')]) {
