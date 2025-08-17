@@ -63,9 +63,7 @@ pipeline {
                         ./gitleaks detect \
                             --source . \
                             --config secrets/gitleaks.toml \
-                            --report-format html \
-                            --report-path reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html \
-                            --verbose
+                            --report-format json
 
                         rm -f gitleaks gitleaks.tar.gz
                     """
