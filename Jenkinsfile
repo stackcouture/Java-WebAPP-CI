@@ -53,11 +53,15 @@ pipeline {
                 script {
                     echo "Running Gitleaks full scan with custom config..."
 
+                    // Ensure COMMIT_SHA is set
+                    env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    echo "[DEBUG] COMMIT_SHA: ${env.COMMIT_SHA}"
+
+                    // Run Gitleaks scan
                     sh """
                         curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz -o gitleaks.tar.gz
                         tar -xvf gitleaks.tar.gz
                         chmod +x gitleaks
-
                         mkdir -p reports/gitleaks
 
                         ./gitleaks detect \
@@ -69,16 +73,16 @@ pipeline {
                         rm -f gitleaks gitleaks.tar.gz
                     """
 
-                    def leaksFound = sh(script: "grep -i 'Secret' reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json | wc -l", returnStdout: true).trim()
-                    if (leaksFound != '0') {
+                    // Read and parse the report
+                    def jsonText = readFile "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
+                    def json = new groovy.json.JsonSlurper().parseText(jsonText)
+                    def leakCount = json.size()
+                    def reportUrl = "${env.BUILD_URL}artifact/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
 
-                        def jsonText = readFile "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
-                        def json = new groovy.json.JsonSlurper().parseText(jsonText)
-                        def leakCount = json.size()
-                        echo "[DEBUG] Parsed leaks: ${leakCount}"
-                        def reportUrl = "${env.BUILD_URL}artifact/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
+                    echo "[DEBUG] Gitleaks Report URL: ${reportUrl}"
+                    echo "[DEBUG] Gitleaks Leak Count: ${leakCount}"
 
-                        
+                    if (leakCount > 0) {
                         sendSlackNotification(
                             status: 'FAILURE',
                             color: 'danger',
@@ -89,6 +93,16 @@ pipeline {
                             isGitleaksNotification: 'true'
                         )
                         error "Gitleaks found potential secrets in Git history!"
+                    } else {
+                        sendSlackNotification(
+                            status: 'SUCCESS',
+                            color: 'good',
+                            channel: env.SLACK_CHANNEL,
+                            secretName: 'my-app/secrets',
+                            leakCount: 0,
+                            reportUrl: reportUrl,
+                            isGitleaksNotification: 'true'
+                        )
                     }
                 }
 
