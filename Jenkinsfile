@@ -63,18 +63,19 @@ pipeline {
                         ./gitleaks detect \
                             --source . \
                             --config secrets/gitleaks.toml \
-                            --report-format json
+                            --report-format json \
+                            --report-path reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json
 
                         rm -f gitleaks gitleaks.tar.gz
                     """
 
-                    def leaksFound = sh(script: "grep -i 'Secret' reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html | wc -l", returnStdout: true).trim()
+                    def leaksFound = sh(script: "grep -i 'Secret' reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json | wc -l", returnStdout: true).trim()
                     if (leaksFound != '0') {
                         error "Gitleaks found potential secrets in Git history!"
                     }
                 }
 
-                archiveArtifacts artifacts: "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html", allowEmptyArchive: true
+                archiveArtifacts artifacts: "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json", allowEmptyArchive: true
             }
         }
 
