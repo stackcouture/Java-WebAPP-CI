@@ -62,7 +62,7 @@ pipeline {
 
                         ./gitleaks detect \
                             --source . \
-                            --config my-app/secrets/gitleaks.toml \
+                            --config secrets/gitleaks.toml \
                             --report-format html \
                             --report-path reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html \
                             --verbose
