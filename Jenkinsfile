@@ -45,10 +45,8 @@ pipeline {
             }
         }
 
-       stage('Gitleaks Scan') {
-            options {
-                timeout(time: 5, unit: 'MINUTES')
-            }
+        stage('Gitleaks Scan') {
+            options { timeout(time: 5, unit: 'MINUTES') }
             steps {
                 script {
                     echo "Running Gitleaks full scan with custom config..."
@@ -71,22 +69,33 @@ pipeline {
                         rm -f gitleaks gitleaks.tar.gz
                     """
 
-                    // Ensure the report exists
-                    def reportPath = "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
+                    echo "[DEBUG] Listing reports/gitleaks directory:"
+                    sh 'ls -l reports/gitleaks || true'
+
+                    def workspace = pwd()
+                    def reportPath = "${workspace}/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
+                    echo "[DEBUG] Using reportPath = ${reportPath}"
+
                     if (!fileExists(reportPath)) {
                         error "[ERROR] Gitleaks report not found at ${reportPath}"
                     }
 
-                    def jsonText = readFile(reportPath)
-                    def json = new groovy.json.JsonSlurper().parseText(jsonText)
-                    def leakCount = json.size()
-                    echo "[DEBUG] Parsed leak count: ${leakCount}"
+                    def jsonText = ''
+                    def leakCount = 0
 
-                    // Archive the report (even with 0 leaks)
-                    archiveArtifacts artifacts: reportPath, allowEmptyArchive: true
+                    try {
+                        jsonText = readFile(reportPath)
+                        def json = new groovy.json.JsonSlurper().parseText(jsonText)
+                        leakCount = json.size()
+                        echo "[DEBUG] Parsed leak count: ${leakCount}"
+                    } catch (Exception e) {
+                        error "[ERROR] Failed to read or parse Gitleaks report JSON: ${e.message}"
+                    }
+
+                    archiveArtifacts artifacts: "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json", allowEmptyArchive: true
 
                     if (leakCount > 0) {
-                        def reportUrl = "${env.BUILD_URL}artifact/${reportPath}"
+                        def reportUrl = "${env.BUILD_URL}artifact/reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
 
                         echo "[DEBUG] Preparing Slack notification with:"
                         echo "        - leakCount = ${leakCount}"
@@ -109,6 +118,7 @@ pipeline {
                 }
             }
         }
+
 
         stage('Build + Test') {
             steps {
