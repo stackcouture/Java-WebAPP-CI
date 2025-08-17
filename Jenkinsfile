@@ -18,7 +18,7 @@ pipeline {
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#java-app'
         DEPENDENCY_TRACK_URL = 'http://15.207.71.114:8081/api/v1/bom'
-        SONAR_HOST = "http://65.1.132.166:9000"
+        SONAR_HOST = "http://13.127.193.165:9000"
         SONAR_PROJECT_KEY = 'Java-App'
     }
 
@@ -84,26 +84,26 @@ pipeline {
             }
         }
 
-        // stage('SonarQube Analysis & Gate') {
-        //     steps {
-        //         echo "Running SonarQube scan..."
-        //         sonarScan(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             sources: 'src/main/java,src/test/java',
-        //             binaries: 'target/classes',
-        //             exclusions: '**/*.js',
-        //             scannerTool: 'sonar-scanner',
-        //             sonarEnv: 'sonar-server',
-        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
-        //         )
-        //         echo "Checking SonarQube quality gate..."
-        //         sonarQualityGateCheck(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             secretName: 'my-app/secrets',
-        //             timeoutMinutes: 5
-        //         )
-        //     }
-        // }
+        stage('SonarQube Analysis & Gate') {
+            steps {
+                echo "Running SonarQube scan..."
+                sonarScan(
+                    projectKey: env.SONAR_PROJECT_KEY,
+                    sources: 'src/main/java,src/test/java',
+                    binaries: 'target/classes',
+                    exclusions: '**/*.js',
+                    scannerTool: 'sonar-scanner',
+                    sonarEnv: 'sonar-server',
+                    jacocoReportPath: 'target/site/jacoco/jacoco.xml'
+                )
+                echo "Checking SonarQube quality gate..."
+                sonarQualityGateCheck(
+                    projectKey: env.SONAR_PROJECT_KEY,
+                    secretName: 'my-app/secrets',
+                    timeoutMinutes: 5
+                )
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
