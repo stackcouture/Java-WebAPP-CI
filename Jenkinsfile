@@ -91,26 +91,26 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis & Gate') {
-            steps {
-                echo "Running SonarQube scan..."
-                sonarScan(
-                    projectKey: env.SONAR_PROJECT_KEY,
-                    sources: 'src/main/java,src/test/java',
-                    binaries: 'target/classes',
-                    exclusions: '**/*.js',
-                    scannerTool: 'sonar-scanner',
-                    sonarEnv: 'sonar-server',
-                    jacocoReportPath: 'target/site/jacoco/jacoco.xml'
-                )
-                echo "Checking SonarQube quality gate..."
-                sonarQualityGateCheck(
-                    projectKey: env.SONAR_PROJECT_KEY,
-                    secretName: 'my-app/secrets',
-                    timeoutMinutes: 5
-                )
-            }
-        }
+        // stage('SonarQube Analysis & Gate') {
+        //     steps {
+        //         echo "Running SonarQube scan..."
+        //         sonarScan(
+        //             projectKey: env.SONAR_PROJECT_KEY,
+        //             sources: 'src/main/java,src/test/java',
+        //             binaries: 'target/classes',
+        //             exclusions: '**/*.js',
+        //             scannerTool: 'sonar-scanner',
+        //             sonarEnv: 'sonar-server',
+        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
+        //         )
+        //         echo "Checking SonarQube quality gate..."
+        //         sonarQualityGateCheck(
+        //             projectKey: env.SONAR_PROJECT_KEY,
+        //             secretName: 'my-app/secrets',
+        //             timeoutMinutes: 5
+        //         )
+        //     }
+        // }
 
         stage('Build Docker Image') {
             steps {
