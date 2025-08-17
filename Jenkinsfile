@@ -207,6 +207,7 @@ pipeline {
             }
         }
 
+        // Testing 
         // stage('Deploy App') {
         //     steps {
         //         echo "Deploying application..."
