@@ -155,46 +155,6 @@ pipeline {
             }
         }
 
-        stage('Sign Image with Cosign') {
-            steps {
-                withCredentials([
-                        file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
-                        string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
-                    ]) {
-                    script {
-                        def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                        echo "Signing Docker image with Cosign: ${imageRef}"
-
-                        sh """
-                            set -e
-                            export COSIGN_EXPERIMENTAL=1
-                            export COSIGN_PASSWORD=\$COSIGN_PASSWORD
-                            cosign sign --key $COSIGN_KEY ${imageRef}
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Verify Cosign Signature') {
-            steps {
-                withCredentials([file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')]) {
-                    script {
-                        def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                        echo "Verifying signature for ${imageRef}"
-
-                        sh """
-                            set -e
-                            export COSIGN_EXPERIMENTAL=1
-                            cosign verify --key $COSIGN_PUB ${imageRef}
-                        """
-                    }
-                }
-            }
-        }
-
-
-
         // stage('Security Scans After Push') {
         //     parallel {
         //         stage('Trivy After Push') {
