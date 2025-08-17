@@ -48,7 +48,7 @@ pipeline {
         stage('Build + Test') {
             steps {
                 echo "Building and running tests..."
-                sh 'mvn clean verify'
+                sh 'mvn clean verify jacoco:report'
             }
         }
 
@@ -93,7 +93,8 @@ pipeline {
         //             binaries: 'target/classes',
         //             exclusions: '**/*.js',
         //             scannerTool: 'sonar-scanner',
-        //             sonarEnv: 'sonar-server'
+        //             sonarEnv: 'sonar-server',
+        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
         //         )
         //         echo "Checking SonarQube quality gate..."
         //         sonarQualityGateCheck(
@@ -258,7 +259,7 @@ pipeline {
     post {
         always {
             echo "Archiving test reports..."
-            postBuildTestArtifacts('My Test Report', '**/surefire-report.html')
+            postBuildTestArtifacts('Unit Report', '**/surefire-report.html')
         }
 
         success {
