@@ -157,7 +157,10 @@ pipeline {
 
         stage('Sign Image with Cosign') {
             steps {
-                withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
+                withCredentials([
+                        file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                        string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                    ]) {
                     script {
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                         echo "Signing Docker image with Cosign: ${imageRef}"
@@ -165,6 +168,7 @@ pipeline {
                         sh """
                             set -e
                             export COSIGN_EXPERIMENTAL=1
+                            export COSIGN_PASSWORD=\$COSIGN_PASSWORD
                             cosign sign --key $COSIGN_KEY ${imageRef}
                         """
                     }
