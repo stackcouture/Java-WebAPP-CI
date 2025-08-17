@@ -11,6 +11,7 @@ pipeline {
         string(name: 'ECR_REPO_NAME', defaultValue: 'javaspring', description: 'Enter repository name')
         string(name: 'AWS_ACCOUNT_ID', defaultValue: '104824081961', description: 'Enter AWS Account ID')
         string(name: 'BRANCH', defaultValue: 'dev', description: 'Deployment branch for CD repo')
+        string(name: 'COMMIT_SHA', defaultValue: '', description: 'Commit SHA')
     }
 
     environment {
@@ -36,7 +37,7 @@ pipeline {
                     echo "Calling checkoutGit..."
                     try {
                         checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
-                        env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                        env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
                         error("Stopping pipeline due to checkout failure")
