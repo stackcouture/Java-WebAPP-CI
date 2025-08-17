@@ -55,7 +55,6 @@ pipeline {
                     def reportDir = "reports/gitleaks"
                     def reportPath = "${reportDir}/${reportFileName}"
 
-                    // Download and run Gitleaks
                     sh """
                         curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz -o gitleaks.tar.gz
                         tar -xvf gitleaks.tar.gz
@@ -74,12 +73,11 @@ pipeline {
                     echo "[DEBUG] Listing ${reportDir} directory:"
                     sh "ls -l ${reportDir} || true"
 
-                    // Ensure report file exists
+                    // IMPORTANT: Use relative path here
                     if (!fileExists(reportPath)) {
                         error "[ERROR] Gitleaks report not found at ${reportPath}"
                     }
 
-                    // Read and parse report
                     def jsonText = ''
                     def leakCount = 0
                     try {
@@ -91,7 +89,7 @@ pipeline {
                         error "[ERROR] Failed to read or parse Gitleaks report JSON: ${e.message}"
                     }
 
-                    // Always publish the report to Jenkins
+                    // Always archive artifacts (relative path)
                     archiveArtifacts artifacts: reportPath, allowEmptyArchive: true
 
                     if (leakCount > 0) {
