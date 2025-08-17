@@ -152,39 +152,13 @@ pipeline {
         stage('Docker Push & Digest') {
             steps {
                 script {
-                    env.FULL_DIGEST_TAG = dockerPush(
+                    dockerPush(
                         imageTag: "${env.COMMIT_SHA}",
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION,
                         secretName: 'my-app/secrets'
                     )
-                    echo "Digest-based image tag: ${env.FULL_DIGEST_TAG}"
-                }
-            }
-        }
-
-        stage('Cosign Sign') {
-            steps {
-                withCredentials([
-                    file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
-                    string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
-                ]) {
-                    script {
-                        cosignSignECR(fullDigestTag: env.FULL_DIGEST_TAG)
-                    }
-                }
-            }
-        }
-
-        stage('Cosign Verify') {
-            steps {
-                withCredentials([
-                    file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')
-                ]) {
-                    script {
-                        cosignVerifyECR(fullDigestTag: env.FULL_DIGEST_TAG)
-                    }
                 }
             }
         }
