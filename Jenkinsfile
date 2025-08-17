@@ -53,9 +53,8 @@ pipeline {
                 script {
                     echo "Running Gitleaks full scan with custom config..."
 
-                    sh '''
-                        GITLEAKS_VERSION=8.18.1
-                        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz -o gitleaks.tar.gz
+                    sh """
+                        curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz -o gitleaks.tar.gz
                         tar -xvf gitleaks.tar.gz
                         chmod +x gitleaks
 
@@ -69,7 +68,7 @@ pipeline {
                             --verbose
 
                         rm -f gitleaks gitleaks.tar.gz
-                    '''
+                    """
 
                     def leaksFound = sh(script: "grep -i 'Secret' reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.html | wc -l", returnStdout: true).trim()
                     if (leaksFound != '0') {
