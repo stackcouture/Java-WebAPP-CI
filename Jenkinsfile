@@ -51,31 +51,30 @@ pipeline {
                 script {
                     echo "Running Gitleaks full scan with custom config..."
 
-                    // Get current commit SHA
-                    env.COMMIT_SHA = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                    echo "[DEBUG] COMMIT_SHA: ${env.COMMIT_SHA}"
+                    def reportFileName = "gitleaks-report-${env.BUILD_NUMBER}.json"
+                    def reportDir = "reports/gitleaks"
+                    def reportPath = "${reportDir}/${reportFileName}"
 
                     // Download and run Gitleaks
                     sh """
                         curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.1/gitleaks_8.18.1_linux_x64.tar.gz -o gitleaks.tar.gz
                         tar -xvf gitleaks.tar.gz
                         chmod +x gitleaks
-                        mkdir -p reports/gitleaks
+                        mkdir -p ${reportDir}
 
                         ./gitleaks detect \
                             --source . \
                             --config secrets/gitleaks.toml \
                             --report-format json \
-                            --report-path reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json
+                            --report-path ${reportPath}
 
                         rm -f gitleaks gitleaks.tar.gz
                     """
 
-                    echo "[DEBUG] Listing reports/gitleaks directory:"
-                    sh 'ls -l reports/gitleaks || true'
+                    echo "[DEBUG] Listing ${reportDir} directory:"
+                    sh "ls -l ${reportDir} || true"
 
                     // Ensure report file exists
-                    def reportPath = "reports/gitleaks/gitleaks-report-${env.COMMIT_SHA}.json"
                     if (!fileExists(reportPath)) {
                         error "[ERROR] Gitleaks report not found at ${reportPath}"
                     }
