@@ -163,6 +163,36 @@ pipeline {
             }
         }
 
+        stage('Sign Docker Image') {
+            steps {
+                withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                                 string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')]) {
+                    script {
+                        echo "Signing Docker image with Cosign: ${env.COMMIT_SHA}"
+
+                        sh """
+                            export COSIGN_EXPERIMENTAL=1
+                            cosign sign --key \$COSIGN_KEY --password \$COSIGN_PASSWORD ${env.COMMIT_SHA}
+                        """
+                    }
+                }
+            }
+        }
+        stage('Verify Cosign Signature') {
+            steps {
+                withCredentials([file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')]) {
+                    script {
+                        echo "Verifying signature for image ${env.COMMIT_SHA}"
+
+                        sh """
+                            export COSIGN_EXPERIMENTAL=1
+                            cosign verify --key \$COSIGN_PUB ${env.COMMIT_SHA}
+                        """
+                    }
+                }
+            }
+        }
+
         // stage('Security Scans After Push') {
         //     parallel {
         //         stage('Trivy After Push') {
