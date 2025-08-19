@@ -185,20 +185,36 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
-                        echo "testing"
-                        def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                        echo "Signing Docker image with Cosign: ${imageRef}"
 
-                         def imageDigest = sh(script: """
-                            aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${imageTag} --region ${REGION} --query 'imageDetails[0].imageDigest' --output text
+                        def imageDigest = sh(script: """
+                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA.take(8)} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
                         """, returnStdout: true).trim()
 
-                        echo "Image Digest: ${imageDigest}"
+                        def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
 
-                        // sh """
-                        //     export COSIGN_EXPERIMENTAL=1
-                        //     cosign sign --key $COSIGN_KEY ${imageRef}
-                        // """
+                        sh """
+                            export COSIGN_PASSWORD=${COSIGN_PASSWORD}
+                            cosign sign --key $COSIGN_KEY ${imageRef}
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify Signed Image with Cosign') {
+            steps {
+                withCredentials([file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')]) {
+                    script {
+                        def imageDigest = sh(script: """
+                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA.take(8)} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
+                            """, returnStdout: true).trim()
+
+                        def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
+
+                        // Verify the signed image
+                        sh """
+                            cosign verify --key $COSIGN_PUB ${imageRef}
+                        """
                     }
                 }
             }
