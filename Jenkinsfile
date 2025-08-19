@@ -34,13 +34,13 @@ pipeline {
                 echo "Cleaning workspace..."
                 cleanWs()
 
-                    script {
-                        withCredentials([file(credentialsId: 'gpg-dev1', variable: 'GPG_KEY1')]) {
-                                
-                                echo "Importing GPG key..."
-                                sh """
-                                    gpg --batch --import "$GPG_KEY1"
-                                """
+                script {
+                    withCredentials([file(credentialsId: 'gpg-dev1', variable: 'GPG_KEY1')]) {
+                            
+                        echo "Importing GPG key..."
+                        sh """
+                            gpg --batch --import "$GPG_KEY1"
+                        """
 
                         try {
                             echo "Starting Git checkout..."
@@ -66,16 +66,15 @@ pipeline {
                                 returnStdout: true
                             ).trim()
                             echo "Commit signed by GPG key: ${commitKey}"
-                        
-                            } catch (Exception e) {
-                                currentBuild.result = 'FAILURE'
-                                echo "Git checkout or verification failed: ${e.message}"
-                                error("Stopping pipeline due to checkout failure")
-                            }
-                            finally {
-                                echo "Cleaning up imported GPG key..."
-                                sh 'rm -f "$GPG_KEY1"'
-                            }
+                    
+                        } catch (Exception e) {
+                            currentBuild.result = 'FAILURE'
+                            echo "Git checkout or verification failed: ${e.message}"
+                            error("Stopping pipeline due to checkout failure")
+                        }
+                        finally {
+                            echo "Cleaning up imported GPG key..."
+                            sh 'rm -f "$GPG_KEY1"'
                         }
                     }
                 }
