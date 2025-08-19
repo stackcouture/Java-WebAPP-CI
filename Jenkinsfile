@@ -188,6 +188,7 @@ pipeline {
                         echo "Signing Docker image with Cosign: ${imageRef}"
 
                         sh """
+                            export COSIGN_EXPERIMENTAL=1
                             cosign sign --key $COSIGN_KEY ${imageRef}
                         """
                     }
