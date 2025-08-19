@@ -38,7 +38,7 @@ pipeline {
                     checkoutAndVerifyGPG(
                         branch: params.BRANCH,
                         gitUrl: env.GIT_URL,
-                        commitSha: env.COMMIT_SHA,
+                        commitSha: env.COMMIT_SHA.take(8),
                         gpgCredentialsId: 'gpg-dev1',
                         secretPath: 'my-app/secrets'
                     )
@@ -72,7 +72,7 @@ pipeline {
                 //             uploadSbomToDependencyTrack(
                 //                 sbomFile: 'target/bom.xml',
                 //                 projectName: "${params.ECR_REPO_NAME}",
-                //                 projectVersion: "${env.COMMIT_SHA}",
+                //                 projectVersion: "${env.COMMIT_SHA.take(8)}",
                 //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
                 //                 secretName: 'my-app/secrets'
                 //             )
@@ -116,7 +116,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                  script {
-                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                     echo "Building Docker image: ${localImageTag}"
                     buildDockerImage(localImageTag)
                  }
@@ -131,7 +131,7 @@ pipeline {
         //             }
         //             steps {
         //                 echo "Running Trivy scan before push..."
-        //                 runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
+        //                 runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
         //             }
         //         }
         //         stage('Snyk Before Push') {
@@ -142,7 +142,7 @@ pipeline {
         //                 echo "Running Snyk scan before push..."
         //                 runSnykScan(
         //                     stageName: "before-push",
-        //                     imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
+        //                     imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
         //                     secretName: 'my-app/secrets'
         //                 )
         //             }
@@ -154,7 +154,7 @@ pipeline {
             steps {
                 script {
                     dockerPush(
-                        imageTag: "${env.COMMIT_SHA}",
+                        imageTag: "${env.COMMIT_SHA.take(8)}",
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION,
@@ -173,7 +173,7 @@ pipeline {
         //             steps {
         //                 echo "Running Trivy scan after push..."
         //                 runTrivyScanUnified("after-push",
-        //                     "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
+        //                     "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
         //             }
         //         }
         //         stage('Snyk After Push') {
@@ -185,7 +185,7 @@ pipeline {
         //                     echo "Running Snyk scan after push..."
         //                     runSnykScan(
         //                         stageName: "after-push",
-        //                         imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
+        //                         imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
         //                         secretName: 'my-app/secrets'
         //                     )
         //                 }
@@ -206,9 +206,9 @@ pipeline {
         stage('Update Deployment Files') {
             steps {
                 script {
-                    echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA}"
+                    echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA.take(8)}"
                     updateImageTag(
-                        imageTag: env.COMMIT_SHA,
+                        imageTag: env.COMMIT_SHA.take(8),
                         secretName: 'my-app/secrets'
                     )
                 }
@@ -227,14 +227,14 @@ pipeline {
         //     steps {
         //         script {
 
-        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
-        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA.take(8)}.html"
+        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA.take(8)}.json"
 
         //             if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
         //                 echo "Generating GPT security report..."
         //                 runGptSecuritySummary(
         //                     projectKey: env.SONAR_PROJECT_KEY, 
-        //                     gitSha: "${env.COMMIT_SHA}",
+        //                     gitSha: "${env.COMMIT_SHA.take(8)}",
         //                     buildNumber: "${env.BUILD_NUMBER}",
         //                     trivyHtmlPath: trivyHtmlPath,
         //                     snykJsonPath: snykJsonPath,
@@ -254,7 +254,7 @@ pipeline {
                 script {
                     echo "Cleaning up Docker images..."
                     cleanupDockerImages(
-                        imageTag: env.COMMIT_SHA,
+                        imageTag: env.COMMIT_SHA.take(8),
                         repoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION
@@ -275,7 +275,7 @@ pipeline {
                 echo "Build SUCCESS - sending reports and notifications..."
                 // sendAiReportEmail(
                 //     branch: params.BRANCH,
-                //     commit: env.COMMIT_SHA ?: 'unknown',
+                //     commit: env.COMMIT_SHA.take(8) ?: 'unknown',
                 //     to: 'naveenramlu@gmail.com'
                 // )
 
