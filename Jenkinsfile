@@ -21,6 +21,7 @@ pipeline {
         DEPENDENCY_TRACK_URL = 'http://15.207.71.114:8081/api/v1/bom'
         SONAR_HOST = "http://13.127.193.165:9000"
         SONAR_PROJECT_KEY = 'Java-App'
+        COSIGN_PASSWORD = "admin123"
     }
 
     tools {
@@ -187,10 +188,16 @@ pipeline {
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                         echo "Signing Docker image with Cosign: ${imageRef}"
 
-                        sh """
-                            export COSIGN_EXPERIMENTAL=1
-                            cosign sign --key $COSIGN_KEY ${imageRef}
-                        """
+                         def imageDigest = sh(script: """
+                            aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${imageTag} --region ${REGION} --query 'imageDetails[0].imageDigest' --output text
+                        """, returnStdout: true).trim()
+
+                        echo "Image Digest: ${imageDigest}"
+
+                        // sh """
+                        //     export COSIGN_EXPERIMENTAL=1
+                        //     cosign sign --key $COSIGN_KEY ${imageRef}
+                        // """
                     }
                 }
             }
