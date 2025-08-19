@@ -29,54 +29,19 @@ pipeline {
     }
 
     stages {
-       stage('Init & Checkout') {
-            steps {
-                echo "Cleaning workspace..."
-                cleanWs()
-
+        
+        stage('Init & Checkout') {
+            steps {                
                 script {
-                    withCredentials([file(credentialsId: 'gpg-dev1', variable: 'GPG_KEY1')]) {
-                            
-                        echo "Importing GPG key..."
-                        sh """
-                            gpg --batch --import "$GPG_KEY1"
-                        """
+                    env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
 
-                        try {
-                            echo "Starting Git checkout..."
-                            checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
-
-                            env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-
-                            echo "Checked out commit: ${env.COMMIT_SHA}"
-                            
-                            def verifyStatus = sh(
-                                script: "git verify-commit ${COMMIT_SHA}",
-                                returnStatus: true
-                            )
-
-                            if (verifyStatus != 0) {
-                                error "GPG signature verification failed for commit ${env.COMMIT_SHA}!"
-                            } else {
-                                echo "GPG signature verification passed."
-                            }
-
-                            def commitKey = sh(
-                                script: "git log -1 --format='%Gg' ${COMMIT_SHA}",
-                                returnStdout: true
-                            ).trim()
-                            echo "Commit signed by GPG key: ${commitKey}"
-                    
-                        } catch (Exception e) {
-                            currentBuild.result = 'FAILURE'
-                            echo "Git checkout or verification failed: ${e.message}"
-                            error("Stopping pipeline due to checkout failure")
-                        }
-                        finally {
-                            echo "Cleaning up imported GPG key..."
-                            sh 'rm -f "$GPG_KEY1"'
-                        }
-                    }
+                    checkoutAndVerifyGPG(
+                        branch: params.BRANCH,
+                        gitUrl: env.GIT_URL,
+                        commitSha: env.COMMIT_SHA,
+                        gpgCredentialsId: 'gpg-dev1',
+                        secretPath: 'my-app/secrets'
+                    )
                 }
             }
         }
