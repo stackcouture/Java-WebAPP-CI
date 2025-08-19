@@ -136,32 +136,32 @@ pipeline {
             }
         }
 
-        // stage('Security Scans Before Push') {
-        //     parallel {
-        //         stage('Trivy Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Trivy scan before push..."
-        //                 runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
-        //             }
-        //         }
-        //         stage('Snyk Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Snyk scan before push..."
-        //                 runSnykScan(
-        //                     stageName: "before-push",
-        //                     imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-        //                     secretName: 'my-app/secrets'
-        //                 )
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Security Scans Before Push') {
+            parallel {
+                stage('Trivy Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy scan before push..."
+                        runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                    }
+                }
+                stage('Snyk Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Snyk scan before push..."
+                        runSnykScan(
+                            stageName: "before-push",
+                            imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                            secretName: 'my-app/secrets'
+                        )
+                    }
+                }
+            }
+        }
 
         stage('Docker Push & Digest') {
             steps {
@@ -199,36 +199,35 @@ pipeline {
             }
         }
 
-
-        // stage('Security Scans After Push') {
-        //     parallel {
-        //         stage('Trivy After Push') {
-        //              options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Trivy scan after push..."
-        //                 runTrivyScanUnified("after-push",
-        //                     "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
-        //             }
-        //         }
-        //         stage('Snyk After Push') {
-        //              options {
-        //                 timeout(time: 15, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 retry(2) {
-        //                     echo "Running Snyk scan after push..."
-        //                     runSnykScan(
-        //                         stageName: "after-push",
-        //                         imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-        //                         secretName: 'my-app/secrets'
-        //                     )
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                     options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy scan after push..."
+                        runTrivyScanUnified("after-push",
+                            "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                    }
+                }
+                stage('Snyk After Push') {
+                     options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        retry(2) {
+                            echo "Running Snyk scan after push..."
+                            runSnykScan(
+                                stageName: "after-push",
+                                imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                                secretName: 'my-app/secrets'
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // stage('Confirm YAML Update') {
         //     steps {
