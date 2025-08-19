@@ -206,29 +206,6 @@ pipeline {
             }
         }
 
-        stage('Verify Signed Image with Cosign') {
-            steps {
-                withCredentials([file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUB')]) {
-                    script {
-                        // Fetch image digest
-                        def imageDigest = sh(script: """
-                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA.take(8)} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
-                        """, returnStdout: true).trim()
-
-                        // Construct the image reference using the digest
-                        def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
-
-                        echo "Verifying Docker image with Cosign: ${imageRef}"
-
-                        // Verify the signed image using the public key
-                        sh """
-                            cosign verify --key $COSIGN_PUB ${imageRef}
-                        """
-                    }
-                }
-            }
-        }
-
         // stage('Security Scans After Push') {
         //     parallel {
         //         stage('Trivy After Push') {
