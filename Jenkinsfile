@@ -162,8 +162,6 @@ pipeline {
         //     }
         // }
 
-         // test
-
         stage('Docker Push & Digest') {
             steps {
                 script {
