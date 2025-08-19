@@ -28,20 +28,20 @@ pipeline {
         maven 'Maven3'
     }
 
-    stages {
-        
+    stages {        
         stage('Init & Checkout') {
-            steps {                
+            steps {
+                echo "Cleaning workspace..."
+                cleanWs()
                 script {
-                    env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-
-                    checkoutAndVerifyGPG(
-                        branch: params.BRANCH,
-                        gitUrl: env.GIT_URL,
-                        commitSha: env.COMMIT_SHA.take(8),
-                        gpgCredentialsId: 'gpg-dev1',
-                        secretPath: 'my-app/secrets'
-                    )
+                    echo "Calling checkoutGit..."
+                    try {
+                        checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
+                        env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    } catch (Exception e) {
+                        currentBuild.result = 'FAILURE'
+                        error("Stopping pipeline due to checkout failure")
+                    }
                 }
             }
         }
