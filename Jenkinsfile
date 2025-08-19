@@ -183,25 +183,17 @@ pipeline {
 
         stage('Sign Image with Cosign') {
             steps {
-                withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
-                    script {
-                        // Check if the image has already been signed
-                        if (env.ECR_IMAGE_DIGEST) {
-                            echo "Image already signed with digest: ${env.ECR_IMAGE_DIGEST}. Skipping signing."
-                        } else {
-                            // Get the image digest
-                            def imageDigest = sh(script: """
-                                aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA.take(8)} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
-                            """, returnStdout: true).trim()
-
-                            def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
-
-                            sh """
-                                export COSIGN_PASSWORD=${COSIGN_PASSWORD}
-                                cosign sign --key $COSIGN_KEY --upload --yes ${imageRef}
-                            """
-                            env.ECR_IMAGE_DIGEST = imageDigest
-                        }
+                script {
+                    if (env.ECR_IMAGE_DIGEST) {
+                        echo "Image already signed with digest: ${env.ECR_IMAGE_DIGEST}. Skipping signing."
+                    } else {
+                        signImageWithCosign(
+                            imageTag: env.COMMIT_SHA.take(8),
+                            ecrRepoName: params.ECR_REPO_NAME,
+                            awsAccountId: params.AWS_ACCOUNT_ID,
+                            region: env.REGION,
+                            cosignPassword: COSIGN_PASSWORD
+                        )
                     }
                 }
             }
