@@ -185,21 +185,16 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
-                        // Fetch image digest
                         def imageDigest = sh(script: """
                             aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA.take(8)} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
                         """, returnStdout: true).trim()
 
-                        // Construct the image reference using the digest
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
 
-                        // Signing the image
                         echo "Signing Docker image with Cosign: ${imageRef}"
-
-                        // Sign the image and optionally upload to transparency log
                         sh """
                             export COSIGN_PASSWORD=${COSIGN_PASSWORD}
-                            cosign sign --key $COSIGN_KEY --upload ${imageRef}
+                            cosign sign --key $COSIGN_KEY --upload --yes ${imageRef}
                         """
                     }
                 }
