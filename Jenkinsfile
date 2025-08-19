@@ -116,10 +116,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                  script {
-                    // def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                    // echo "Building Docker image: ${localImageTag}"
-                    // buildDockerImage(localImageTag)
-
                     def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                     
                     env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
