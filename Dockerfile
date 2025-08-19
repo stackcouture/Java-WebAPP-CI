@@ -1,5 +1,5 @@
 # ------------ Stage 1: Build using Maven ------------
-FROM maven:3.9.6-eclipse-temurin-17 AS builder
+FROM 104824081961.dkr.ecr.ap-south-1.amazonaws.com/maven:3.9.6-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests && cp target/*.jar target/app.jar
 
 # ------------ Stage 2: Create minimal runtime image ------------
-FROM eclipse-temurin:17-jre-alpine
+FROM 104824081961.dkr.ecr.ap-south-1.amazonaws.com/eclipse-temurin:17-jre-alpine
 
 # Install curl for healthcheck and create non-root user for security
 RUN apk add --no-cache curl && \
