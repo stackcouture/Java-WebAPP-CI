@@ -185,6 +185,7 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
+                        echo "testing"
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                         echo "Signing Docker image with Cosign: ${imageRef}"
 
