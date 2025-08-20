@@ -204,7 +204,7 @@ pipeline {
             steps {
 
                 withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
-                         string(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUBLIC_KEY')]) {
+                                file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUBLIC_KEY')]) {
                 // withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
                         // Get the image digest
