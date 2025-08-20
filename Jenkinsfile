@@ -209,7 +209,7 @@ pipeline {
                     script {
                         // Get the image digest
                         def imageDigest = sh(script: """
-                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.IMAGE_TAG} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
+                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
                         """, returnStdout: true).trim()
 
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
