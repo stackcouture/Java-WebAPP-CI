@@ -120,8 +120,9 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
-                    echo "Building Docker image locally..."
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+                    
+                    echo "Building Docker image locally for commit: ${env.COMMIT_SHA} and build: ${env.BUILD_NUMBER}"
                     buildDockerImage(localImageTag)
                     env.IMAGE_TAG = localImageTag
                 }
@@ -158,9 +159,10 @@ pipeline {
         stage('Docker Push') {
             steps {
                 script {
-                    echo "Pushing Docker image with tag: ${env.IMAGE_TAG}"
+                    echo "Pushing Docker image: ${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+
                     dockerPush(
-                        imageTag: "${env.IMAGE_TAG}",
+                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: "${env.REGION}",
@@ -207,9 +209,11 @@ pipeline {
                                 file(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUBLIC_KEY')]) {
                 // withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
+
+                        def commitImg = "${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
                         // Get the image digest
                         def imageDigest = sh(script: """
-                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.COMMIT_SHA} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
+                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${commitImg} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
                         """, returnStdout: true).trim()
 
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
@@ -294,7 +298,7 @@ pipeline {
                 script {
                     echo "Cleaning up Docker images..."
                     cleanupDockerImages(
-                        imageTag: "${env.COMMIT_SHA}",
+                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
                         repoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION
