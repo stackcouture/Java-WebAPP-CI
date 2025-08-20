@@ -88,6 +88,13 @@ pipeline {
                     echo "Building Docker image locally..."
                     buildDockerImage(localImageTag)
                     env.IMAGE_TAG = localImageTag
+
+                     env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
+                        params.ECR_REPO_NAME, 
+                        env.COMMIT_SHA.take(8), 
+                        params.AWS_ACCOUNT_ID, 
+                        env.REGION
+                    ) ?: ''
                 }
             }
         }
@@ -126,6 +133,8 @@ pipeline {
                 }
             }
         }
+
+
 
         stage('Docker Push & Digest') {
             steps {
