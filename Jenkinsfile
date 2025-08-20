@@ -38,7 +38,8 @@ pipeline {
                     echo "Calling checkoutGit..."
                     try {
                         checkoutGit(params.BRANCH, env.GIT_URL, 'my-app/secrets')
-                        env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                        def commitSha = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                        env.COMMIT_SHA = "${commitSha}-${env.BUILD_NUMBER}"
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
                         error("Stopping pipeline due to checkout failure: ${e.message}")
@@ -120,7 +121,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                     
                     echo "Building Docker image locally for commit: ${env.COMMIT_SHA} and build: ${env.BUILD_NUMBER}"
                     buildDockerImage(localImageTag)
@@ -159,10 +160,10 @@ pipeline {
         stage('Docker Push') {
             steps {
                 script {
-                    echo "Pushing Docker image: ${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+                    echo "Pushing Docker image: ${env.COMMIT_SHA}"
 
                     dockerPush(
-                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        imageTag: env.COMMIT_SHA,
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: "${env.REGION}",
@@ -205,9 +206,9 @@ pipeline {
         stage('Sign Image with Cosign') {
             steps {
                 script {
-                    echo "Signing Docker image: ${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+                    echo "Signing Docker image: ${env.COMMIT_SHA}"
                     signImageWithCosign(
-                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        imageTag: env.COMMIT_SHA,
                         ecrRepoName: params.ECR_REPO_NAME,
                         region: env.REGION,
                         cosignPassword: COSIGN_PASSWORD,
@@ -230,26 +231,14 @@ pipeline {
             steps {
                 script {
                     echo "Updating deployment"
-                    // updateImageTag(
-                    //     imageTag: env.ECR_IMAGE_DIGEST,
-                    //     secretName: 'my-app/secrets'
-                    // )
                     updateImageTag(
-                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        imageTag: env.COMMIT_SHA,
                         ecrRepoName: params.ECR_REPO_NAME,
                         region: env.REGION,
                         cosignPassword: COSIGN_PASSWORD,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         secretName: 'my-app/secrets'
                     )
-
-                    // signImageWithCosign(
-                    //     imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
-                    //     ecrRepoName: params.ECR_REPO_NAME,
-                    //     region: env.REGION,
-                    //     cosignPassword: COSIGN_PASSWORD,
-                    //     awsAccountId: params.AWS_ACCOUNT_ID
-                    // )
                 }
             }
         }
@@ -292,7 +281,7 @@ pipeline {
                 script {
                     echo "Cleaning up Docker images..."
                     cleanupDockerImages(
-                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        imageTag: env.COMMIT_SHA,
                         repoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION
