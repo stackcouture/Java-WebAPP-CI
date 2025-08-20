@@ -56,57 +56,16 @@ pipeline {
             }
         }
 
-        stage('Javadoc') {
-            steps {
-                echo "Generating Javadoc..."
-                sh 'mvn javadoc:javadoc'
-            }
-        }
-
-        stage('SBOM + FS Scan') {
-            parallel {
-                stage('Trivy FS Scan') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        echo "Running Trivy filesystem scan..."
-                        sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
-                        script {
-                            def shortSha = env.COMMIT_SHA.take(8)
-                            runTrivyScanUnified("filesystem-scan", ".", "fs", shortSha)
-                        }
-                    }
-                }
-            }
-        }
-
         stage('Build Docker Image') {
             steps {
                 script {
                     def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                    
-                    echo "Checking if ECR image exists..."
-                    env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
-                        params.ECR_REPO_NAME, 
-                        env.COMMIT_SHA.take(8), 
-                        params.AWS_ACCOUNT_ID, 
-                        env.REGION
-                    ) ?: ''
-                    // testing
-                    if (env.ECR_IMAGE_DIGEST) {
-                        echo "Docker image exists with digest: ${env.ECR_IMAGE_DIGEST}. Pulling image..."
-                        sh """
-                            aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
-                            docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
-                        """
-                    } else {
-                        echo "Docker image does not exist. Building a new Docker image..."
-                        buildDockerImage(localImageTag)
-                    }
+                    echo "Building Docker image locally..."
+                    buildDockerImage(localImageTag)
                 }
             }
         }
+    
 
         stage('Security Scans Before Push') {
             parallel {
@@ -117,11 +76,6 @@ pipeline {
                     steps {
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
-                            echo "Pulling image ${env.IMAGE_TAG} from ECR for Trivy scan..."
-                            sh """
-                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${env.ECR_URI}
-                                docker pull ${env.ECR_URI}/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
-                            """
                             runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
                         }
                     }
@@ -133,11 +87,8 @@ pipeline {
                     }
                     steps {
                         script {
-                            echo "Pulling image ${env.IMAGE_TAG} from ECR for Snyk scan..."
-                            sh """
-                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${env.ECR_URI}
-                                docker pull ${env.ECR_URI}/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
-                            """
+                            echo "Running Snyk scan on the locally built image..."
+                            
                             runSnykScan(
                                 stageName: "before-push",
                                 imageTag: env.IMAGE_TAG,
