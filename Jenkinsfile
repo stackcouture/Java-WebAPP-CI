@@ -134,8 +134,6 @@ pipeline {
             }
         }
 
-
-
         stage('Docker Push & Digest') {
             steps {
                 script {
@@ -160,13 +158,14 @@ pipeline {
                     if (env.ECR_IMAGE_DIGEST) {
                         echo "Image already signed with digest: ${env.ECR_IMAGE_DIGEST}. Skipping signing."
                     } else {
-                        signImageWithCosign(
+                        env.signedImaged = signImageWithCosign(
                             imageTag: env.COMMIT_SHA.take(8),
                             ecrRepoName: params.ECR_REPO_NAME,
                             awsAccountId: params.AWS_ACCOUNT_ID,
                             region: env.REGION,
                             cosignPassword: COSIGN_PASSWORD
                         )
+                        echo "Signed Imaged Diges ${env.signedImaged}"
                     }
                 }
             }
