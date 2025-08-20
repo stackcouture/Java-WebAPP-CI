@@ -140,7 +140,14 @@ pipeline {
                     ) ?: ''
 
                     if (env.ECR_IMAGE_DIGEST) {
-                        echo "Docker image already exists with digest: ${env.ECR_IMAGE_DIGEST}. Skipping build."
+
+                        echo "Docker image already exists with digest: ${env.ECR_IMAGE_DIGEST}. Pulling image..."
+                
+                        // Pull image from ECR if it already exists
+                        sh """
+                            aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
+                            docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
+                        """                        
                     } else {
                         echo "Image does not exist. Building new Docker image..."
                         buildDockerImage(localImageTag)
@@ -158,6 +165,14 @@ pipeline {
                     steps {
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
+                            def imageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
+                    
+                            // Ensure the image is pulled before scanning
+                            echo "Pulling image ${imageTag} from ECR for Trivy scan..."
+                            sh """
+                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
+                                docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${imageTag}
+                            """
                             runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
                         }
                     }
@@ -167,11 +182,27 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
-                        runSnykScan(
-                            stageName: "before-push",
-                            imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                            secretName: 'my-app/secrets'
-                        )
+                        script {
+                            def imageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
+                            
+                            // Ensure the image is pulled before scanning
+                            echo "Pulling image ${imageTag} from ECR for Snyk scan..."
+                            sh """
+                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
+                                docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${imageTag}
+                            """
+                            
+                            runSnykScan(
+                                stageName: "before-push",
+                                imageTag: imageTag,
+                                secretName: 'my-app/secrets'
+                            )
+                        }
+                        // runSnykScan(
+                        //     stageName: "before-push",
+                        //     imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                        //     secretName: 'my-app/secrets'
+                        // )
                     }
                 }
             }
