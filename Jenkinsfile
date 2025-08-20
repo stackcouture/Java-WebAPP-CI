@@ -120,7 +120,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
                     echo "Building Docker image locally..."
                     buildDockerImage(localImageTag)
                     env.IMAGE_TAG = localImageTag
