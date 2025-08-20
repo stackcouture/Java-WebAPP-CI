@@ -88,7 +88,8 @@ pipeline {
                         echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         
-                        runTrivyScanUnified("filesystem-scan",".", "fs")
+                        def shortSha = env.COMMIT_SHA.take(8)
+                        runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
                         // script {
                         //     runTrivyScan(
                         //         stageName: "filesystem-scan",
@@ -156,16 +157,8 @@ pipeline {
                     }
                     steps {
                         echo "Image does not exist. Running Trivy scan before push..."
-
-                        runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
-                        // script {
-                        //     runTrivyScan(
-                        //         stageName: "before-push",
-                        //         scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                        //         scanType: "image",
-                        //         fileName: env.COMMIT_SHA.take(8)
-                        //     )
-                        // }
+                        def shortSha = env.COMMIT_SHA.take(8)
+                        runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
                     }
                 }
                 stage('Snyk Before Push') {
@@ -231,7 +224,7 @@ pipeline {
                     }
                     steps {
                         echo "Running Trivy scan after push..."
-                        runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                        // runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
                         // script {
                         //     runTrivyScan(
                         //         stageName: "after-push",
