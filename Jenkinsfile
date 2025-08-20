@@ -227,7 +227,7 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     when {
-                        expression { return !env.ECR_IMAGE_DIGEST }
+                        expression { return env.ECR_IMAGE_DIGEST }
                     }
                     steps {
                         echo "Running Trivy scan after push..."
@@ -242,7 +242,7 @@ pipeline {
                         timeout(time: 15, unit: 'MINUTES')
                     }
                     when {
-                        expression { return !env.ECR_IMAGE_DIGEST }
+                        expression { return env.ECR_IMAGE_DIGEST }
                     }
                     steps {
                         retry(2) {
