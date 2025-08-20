@@ -72,7 +72,7 @@ pipeline {
                 //             uploadSbomToDependencyTrack(
                 //                 sbomFile: 'target/bom.xml',
                 //                 projectName: "${params.ECR_REPO_NAME}",
-                //                 projectVersion: "${env.COMMIT_SHA.take(8)}",
+                //                 projectVersion: "${env.COMMIT_SHA}",
                 //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
                 //                 secretName: 'my-app/secrets'
                 //             )
@@ -88,8 +88,7 @@ pipeline {
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         
                         script {
-                            def shortSha = env.COMMIT_SHA.take(8)
-                            runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
+                            runTrivyScanUnified("filesystem-scan",".", "fs")
                         }
                     }
                 }
@@ -121,7 +120,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                     echo "Building Docker image locally..."
                     buildDockerImage(localImageTag)
                     env.IMAGE_TAG = localImageTag
@@ -164,7 +163,7 @@ pipeline {
         //             }
         //             steps {
         //                 script {
-        //                     def shortSha = env.COMMIT_SHA.take(8)
+        //                     def shortSha = env.COMMIT_SHA
         //                     def imageTag = env.IMAGE_TAG
         //                     runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
         //                 }
@@ -197,7 +196,7 @@ pipeline {
         //                 echo "Image already pushed to ECR with digest: ${env.ECR_IMAGE_DIGEST}. Skipping push."
         //             } else {
         //                 dockerPush(
-        //                     imageTag: env.COMMIT_SHA.take(8),
+        //                     imageTag: env.COMMIT_SHA,
         //                     ecrRepoName: params.ECR_REPO_NAME,
         //                     awsAccountId: params.AWS_ACCOUNT_ID,
         //                     region: env.REGION,
@@ -226,7 +225,7 @@ pipeline {
         stage('Security Scans After Push') {
             parallel {
                 stage('Trivy After Push') {
-                        options {
+                    options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
@@ -236,7 +235,7 @@ pipeline {
                     }
                 }
                 stage('Snyk After Push') {
-                        options {
+                    options {
                         timeout(time: 15, unit: 'MINUTES')
                     }
                     steps {
@@ -301,9 +300,9 @@ pipeline {
         stage('Update Deployment Files') {
             steps {
                 script {
-                    echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA.take(8)}"
+                    echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA}"
                     updateImageTag(
-                        imageTag: env.COMMIT_SHA.take(8),
+                        imageTag: env.COMMIT_SHA,
                         secretName: 'my-app/secrets'
                     )
                 }
@@ -348,7 +347,7 @@ pipeline {
                 script {
                     echo "Cleaning up Docker images..."
                     cleanupDockerImages(
-                        imageTag: env.COMMIT_SHA.take(8),
+                        imageTag: env.COMMIT_SHA,
                         repoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION
