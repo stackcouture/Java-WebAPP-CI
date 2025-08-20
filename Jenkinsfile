@@ -23,7 +23,6 @@ pipeline {
         SONAR_PROJECT_KEY = 'Java-App'
         COSIGN_PASSWORD = "admin123"
         ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
-        IMAGE_TAG = "${ECR_REPO_NAME}:${params.COMMIT_SHA.take(8)}"
     }
 
     tools {
@@ -62,6 +61,7 @@ pipeline {
                     def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                     echo "Building Docker image locally..."
                     buildDockerImage(localImageTag)
+                    env.IMAGE_TAG = localImageTag
                 }
             }
         }
@@ -76,6 +76,7 @@ pipeline {
                     steps {
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
+                            def imageTag = env.IMAGE_TAG
                             runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
                         }
                     }
@@ -88,7 +89,7 @@ pipeline {
                     steps {
                         script {
                             echo "Running Snyk scan on the locally built image..."
-                            
+
                             runSnykScan(
                                 stageName: "before-push",
                                 imageTag: env.IMAGE_TAG,
