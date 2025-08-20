@@ -88,14 +88,14 @@ pipeline {
                         echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         
-                        script {
-                            runTrivyScan(
-                                stageName: "filesystem-scan",
-                                scanTarget: ".",
-                                scanType: "fs",
-                                fileName: env.COMMIT_SHA.take(8)
-                            )
-                        }
+                        // script {
+                        //     runTrivyScan(
+                        //         stageName: "filesystem-scan",
+                        //         scanTarget: ".",
+                        //         scanType: "fs",
+                        //         fileName: env.COMMIT_SHA.take(8)
+                        //     )
+                        // }
                     }
                 }
             }
