@@ -155,7 +155,7 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     when {
-                        expression { return env.ECR_IMAGE_DIGEST }
+                        expression { return env.ECR_IMAGE_DIGEST != '' }
                     }
                     steps {
                         echo "Image does not exist. Running Trivy scan before push..."
@@ -170,7 +170,7 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     when {
-                        expression { return env.ECR_IMAGE_DIGEST }
+                        expression { return env.ECR_IMAGE_DIGEST != '' }
                     }
                     steps {
                         echo "Image does not exist. Running Snyk scan before push..."
