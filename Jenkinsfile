@@ -96,12 +96,6 @@ pipeline {
                                 fileName: env.COMMIT_SHA.take(8)
                             )
                         }
-                        // runTrivyScan(
-                        //     stageName: "filesystem-scan",
-                        //     scanTarget: ".",
-                        //     scanType: "fs",
-                        //     fileName = env.COMMIT_SHA.take(8)
-                        // )
                     }
                 }
             }
@@ -170,13 +164,6 @@ pipeline {
                                 fileName: env.COMMIT_SHA.take(8)
                             )
                         }
-                        
-                        // runTrivyScan(
-                        //     stageName: "before-push",
-                        //     scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                        //     scanType: "image",
-                        //     fileName = env.COMMIT_SHA.take(8)
-                        // )
                     }
                 }
                 stage('Snyk Before Push') {
@@ -243,20 +230,14 @@ pipeline {
                     steps {
                         echo "Running Trivy scan after push..."
 
-                        script {
-                            runTrivyScan(
-                                stageName: "after-push",
-                                scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                                scanType: "image",
-                                fileName: env.ECR_IMAGE_DIGEST
-                            )
-                        }
-                        // runTrivyScan(
-                        //     stageName: "after-push",
-                        //     scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                        //     scanType: "image",
-                        //     fileName = env.ECR_IMAGE_DIGEST
-                        // )
+                        // script {
+                        //     runTrivyScan(
+                        //         stageName: "after-push",
+                        //         scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                        //         scanType: "image",
+                        //         fileName: env.ECR_IMAGE_DIGEST
+                        //     )
+                        // }
                     }
                 }
                 stage('Snyk After Push') {
