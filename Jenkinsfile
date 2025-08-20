@@ -226,36 +226,45 @@ pipeline {
                      options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
+                    when {
+                        expression { return !env.ECR_IMAGE_DIGEST }
+                    }
                     steps {
                         echo "Running Trivy scan after push..."
-                        // script {
-                        //     def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
-                        //     runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
-                        //    // runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
-                        // }
-                        // 
-                        // script {
-                        //     runTrivyScan(
-                        //         stageName: "after-push",
-                        //         scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                        //         scanType: "image",
-                        //         fileName: env.ECR_IMAGE_DIGEST
-                        //     )
-                        // }
+                        script {
+                            def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
+                            runTrivyScanUnified("after-push", imageRef, "image", env.ECR_IMAGE_DIGEST)
+                        }
                     }
                 }
                 stage('Snyk After Push') {
-                     options {
+                    options {
                         timeout(time: 15, unit: 'MINUTES')
+                    }
+                    when {
+                        expression { return !env.ECR_IMAGE_DIGEST }
                     }
                     steps {
                         retry(2) {
                             echo "Running Snyk scan after push..."
-                            runSnykScan(
-                                stageName: "after-push",
-                                imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                                secretName: 'my-app/secrets'
-                            )
+
+                            script {
+                                def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
+                            //runTrivyScanUnified("after-push", imageRef, "image", env.ECR_IMAGE_DIGEST)
+                            //}
+
+                                runSnykScan(
+                                    stageName: "after-push",
+                                    imageTag: imageRef,
+                                    secretName: 'my-app/secrets'
+                                )
+
+                                // runSnykScan(
+                                //     stageName: "after-push",
+                                //     imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                                //     secretName: 'my-app/secrets'
+                                // )
+                            }
                         }
                     }
                 }
