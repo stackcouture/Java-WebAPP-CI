@@ -202,7 +202,10 @@ pipeline {
 
         stage('Sign Image with Cosign') {
             steps {
-                withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
+
+                withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                         string(credentialsId: 'cosign-public-key', variable: 'COSIGN_PUBLIC_KEY')]) {
+                // withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
                         // Get the image digest
                         def imageDigest = sh(script: """
@@ -211,10 +214,20 @@ pipeline {
 
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
 
-                        sh """
-                            export COSIGN_PASSWORD=${COSIGN_PASSWORD}
-                            cosign sign --key $COSIGN_KEY --upload --yes ${imageRef}
-                        """
+                        // Check if image is already signed using the public key
+                        def isSigned = sh(script: """
+                            COSIGN_EXPERIMENTAL=1 cosign verify --key $COSIGN_PUBLIC_KEY ${imageRef} > /dev/null 2>&1
+                        """, returnStatus: true) == 0
+
+                        if (isSigned) {
+                            echo "Image ${imageRef} is already signed. Skipping signing."
+                        } else {
+                            echo "Image ${imageRef} is not signed yet. Signing now..."
+                            sh """
+                                export COSIGN_PASSWORD=${COSIGN_PASSWORD}
+                                cosign sign --key $COSIGN_KEY --upload --yes ${imageRef}
+                            """
+                        }
                         env.ECR_IMAGE_DIGEST = imageDigest
                         echo "ECR Image Digest ${env.ECR_IMAGE_DIGEST}"
                     }
