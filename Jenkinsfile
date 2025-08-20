@@ -154,11 +154,7 @@ pipeline {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
-                    when {
-                        expression { return env.ECR_IMAGE_DIGEST != '' }
-                    }
                     steps {
-                        echo "Image does not exist. Running Trivy scan before push..."
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
                             runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
@@ -169,11 +165,7 @@ pipeline {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
-                    when {
-                        expression { return env.ECR_IMAGE_DIGEST != '' }
-                    }
                     steps {
-                        echo "Image does not exist. Running Snyk scan before push..."
                         runSnykScan(
                             stageName: "before-push",
                             imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
@@ -223,11 +215,8 @@ pipeline {
         stage('Security Scans After Push') {
             parallel {
                 stage('Trivy After Push') {
-                     options {
+                    options {
                         timeout(time: 10, unit: 'MINUTES')
-                    }
-                    when {
-                        expression { return env.ECR_IMAGE_DIGEST }
                     }
                     steps {
                         echo "Running Trivy scan after push..."
@@ -240,9 +229,6 @@ pipeline {
                 stage('Snyk After Push') {
                     options {
                         timeout(time: 15, unit: 'MINUTES')
-                    }
-                    when {
-                        expression { return env.ECR_IMAGE_DIGEST }
                     }
                     steps {
                         retry(2) {
