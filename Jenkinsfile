@@ -29,7 +29,7 @@ pipeline {
         maven 'Maven3'
     }
 
-    stages {        
+    stages {       
         stage('Init & Checkout') {
             steps {
                 echo "Cleaning workspace..."
@@ -92,14 +92,6 @@ pipeline {
                             def shortSha = env.COMMIT_SHA.take(8)
                             runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
                         }
-                        // script {
-                        //     runTrivyScan(
-                        //         stageName: "filesystem-scan",
-                        //         scanTarget: ".",
-                        //         scanType: "fs",
-                        //         fileName: env.COMMIT_SHA.take(8)
-                        //     )
-                        // }
                     }
                 }
             }
@@ -166,14 +158,13 @@ pipeline {
         stage('Docker Push & Digest') {
             steps {
                 script {
-                        dockerPush(
-                            imageTag: env.COMMIT_SHA.take(8),
-                            ecrRepoName: params.ECR_REPO_NAME,
-                            awsAccountId: params.AWS_ACCOUNT_ID,
-                            region: env.REGION,
-                            secretName: 'my-app/secrets'
-                        )
-                    }
+                    dockerPush(
+                        imageTag: env.COMMIT_SHA.take(8),
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
+                        region: env.REGION,
+                        secretName: 'my-app/secrets'
+                    )
                 }
             }
         }
@@ -257,7 +248,6 @@ pipeline {
             }
         }
 
-        // Testing 
         // stage('Deploy App') {
         //     steps {
         //         echo "Deploying application..."
@@ -265,7 +255,7 @@ pipeline {
         //     }
         // }
 
-        // stage('Generate GPT Security Report') {
+         // stage('Generate GPT Security Report') {
         //     steps {
         //         script {
 
@@ -304,6 +294,7 @@ pipeline {
                 }
             }
         }
+
     }
 
     post {
@@ -365,6 +356,8 @@ pipeline {
                 )
             }
         }
-
     }
 }
+
+
+
