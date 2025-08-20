@@ -118,11 +118,33 @@ pipeline {
         //     }
         // }
 
+        // stage('Build Docker Image') {
+        //     steps {
+        //          script {
+        //             def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
+        //             buildDockerImage(localImageTag)
+        //          }
+        //     }
+        // }
+
         stage('Build Docker Image') {
             steps {
                  script {
                     def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                    buildDockerImage(localImageTag)
+                    
+                    env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
+                        params.ECR_REPO_NAME, 
+                        env.COMMIT_SHA.take(8), 
+                        params.AWS_ACCOUNT_ID, 
+                        env.REGION
+                    ) ?: ''
+
+                    if (env.ECR_IMAGE_DIGEST) {
+                        echo "Docker image already exists with digest: ${env.ECR_IMAGE_DIGEST}. Skipping build."
+                    } else {
+                        echo "Image does not exist. Building new Docker image..."
+                        buildDockerImage(localImageTag)
+                    }
                  }
             }
         }
@@ -155,30 +177,66 @@ pipeline {
             }
         }
 
+        // stage('Docker Push & Digest') {
+        //     steps {
+        //         script {
+        //             dockerPush(
+        //                 imageTag: env.COMMIT_SHA.take(8),
+        //                 ecrRepoName: params.ECR_REPO_NAME,
+        //                 awsAccountId: params.AWS_ACCOUNT_ID,
+        //                 region: env.REGION,
+        //                 secretName: 'my-app/secrets'
+        //             )
+        //         }
+        //     }
+        // }
+
         stage('Docker Push & Digest') {
             steps {
                 script {
-                    dockerPush(
-                        imageTag: env.COMMIT_SHA.take(8),
-                        ecrRepoName: params.ECR_REPO_NAME,
-                        awsAccountId: params.AWS_ACCOUNT_ID,
-                        region: env.REGION,
-                        secretName: 'my-app/secrets'
-                    )
+                    if (env.ECR_IMAGE_DIGEST) {
+                        echo "Image already pushed to ECR with digest: ${env.ECR_IMAGE_DIGEST}. Skipping push."
+                    } else {
+                        dockerPush(
+                            imageTag: env.COMMIT_SHA.take(8),
+                            ecrRepoName: params.ECR_REPO_NAME,
+                            awsAccountId: params.AWS_ACCOUNT_ID,
+                            region: env.REGION,
+                            secretName: 'my-app/secrets'
+                        )
+                    }
                 }
             }
         }
 
+        // stage('Sign Image with Cosign') {
+        //     steps {
+        //         script {
+        //             signImageWithCosign(
+        //                 imageTag: env.COMMIT_SHA.take(8),
+        //                 ecrRepoName: params.ECR_REPO_NAME,
+        //                 awsAccountId: params.AWS_ACCOUNT_ID,
+        //                 region: env.REGION,
+        //                 cosignPassword: COSIGN_PASSWORD
+        //             )
+        //         }
+        //     }
+        // }
+
         stage('Sign Image with Cosign') {
             steps {
                 script {
-                    signImageWithCosign(
-                        imageTag: env.COMMIT_SHA.take(8),
-                        ecrRepoName: params.ECR_REPO_NAME,
-                        awsAccountId: params.AWS_ACCOUNT_ID,
-                        region: env.REGION,
-                        cosignPassword: COSIGN_PASSWORD
-                    )
+                    if (env.ECR_IMAGE_DIGEST) {
+                        echo "Image already signed with digest: ${env.ECR_IMAGE_DIGEST}. Skipping signing."
+                    } else {
+                        signImageWithCosign(
+                            imageTag: env.COMMIT_SHA.take(8),
+                            ecrRepoName: params.ECR_REPO_NAME,
+                            awsAccountId: params.AWS_ACCOUNT_ID,
+                            region: env.REGION,
+                            cosignPassword: COSIGN_PASSWORD
+                        )
+                    }
                 }
             }
         }
