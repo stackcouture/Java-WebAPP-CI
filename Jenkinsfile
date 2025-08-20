@@ -361,7 +361,6 @@ pipeline {
         always {
             echo "Archiving test reports..."
             postBuildTestArtifacts('Unit Report', '**/surefire-report.html')
-            scanReportDashboard()
         }
 
         success {
