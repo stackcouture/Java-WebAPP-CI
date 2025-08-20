@@ -55,6 +55,13 @@ pipeline {
             }
         }
 
+        stage('Javadoc') {
+            steps {
+                echo "Generating Javadoc..."
+                sh 'mvn javadoc:javadoc'
+            }
+        }
+
         stage('SBOM + FS Scan') {
             parallel {
                 stage('Trivy FS Scan') {
