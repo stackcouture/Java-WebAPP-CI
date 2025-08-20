@@ -55,6 +55,25 @@ pipeline {
             }
         }
 
+        stage('SBOM + FS Scan') {
+            parallel {
+                stage('Trivy FS Scan') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy filesystem scan..."
+                        sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
+                        
+                        script {
+                            def shortSha = env.COMMIT_SHA.take(8)
+                            runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
+                        }
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
