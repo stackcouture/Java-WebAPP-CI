@@ -163,7 +163,6 @@ pipeline {
             steps {
                 script {
                     echo "Pushing Docker image: ${env.COMMIT_SHA}"
-
                     dockerPush(
                         imageTag: env.COMMIT_SHA,
                         ecrRepoName: params.ECR_REPO_NAME,
@@ -171,36 +170,6 @@ pipeline {
                         region: "${env.REGION}",
                         secretName: 'my-app/secrets'
                     )
-                }
-            }
-        }
-
-        stage('Security Scans After Push') {
-            parallel {
-                stage('Trivy After Push') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        echo "Running Trivy scan after push..."
-                        runTrivyScanUnified("after-push",
-                            "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
-                    }
-                }
-                stage('Snyk After Push') {
-                    options {
-                        timeout(time: 15, unit: 'MINUTES')
-                    }
-                    steps {
-                        retry(2) {
-                            echo "Running Snyk scan after push..."
-                            runSnykScan(
-                                stageName: "after-push",
-                                imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
-                                secretName: 'my-app/secrets'
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -216,6 +185,43 @@ pipeline {
                         cosignPassword: COSIGN_PASSWORD,
                         awsAccountId: params.AWS_ACCOUNT_ID
                     )
+
+                    def digest = getImageDigest(
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        imageTag: env.COMMIT_SHA,
+                        region: env.REGION
+                    )                    
+                    env.IMAGE_DIGEST = digest
+                }
+            }
+        }
+
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy scan after push..."
+                        runTrivyScanUnified("after-push",
+                            "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.IMAGE_DIGEST}", "image")
+                    }
+                }
+                stage('Snyk After Push') {
+                    options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        retry(2) {
+                            echo "Running Snyk scan after push..."
+                            runSnykScan(
+                                stageName: "after-push",
+                                imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.IMAGE_DIGEST}",
+                                secretName: 'my-app/secrets'
+                            )
+                        }
+                    }
                 }
             }
         }
