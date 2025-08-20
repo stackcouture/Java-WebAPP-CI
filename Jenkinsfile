@@ -93,7 +93,7 @@ pipeline {
                         params.AWS_ACCOUNT_ID, 
                         env.REGION
                     ) ?: ''
-                    
+                    // testing
                     if (env.ECR_IMAGE_DIGEST) {
                         echo "Docker image exists with digest: ${env.ECR_IMAGE_DIGEST}. Pulling image..."
                         sh """
