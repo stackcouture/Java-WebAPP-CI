@@ -236,8 +236,20 @@ pipeline {
                     // )
                     updateImageTag(
                         imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        region: env.REGION,
+                        cosignPassword: COSIGN_PASSWORD,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
                         secretName: 'my-app/secrets'
                     )
+
+                    // signImageWithCosign(
+                    //     imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                    //     ecrRepoName: params.ECR_REPO_NAME,
+                    //     region: env.REGION,
+                    //     cosignPassword: COSIGN_PASSWORD,
+                    //     awsAccountId: params.AWS_ACCOUNT_ID
+                    // )
                 }
             }
         }
