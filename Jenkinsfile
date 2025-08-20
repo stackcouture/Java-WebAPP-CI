@@ -157,6 +157,7 @@ pipeline {
                     steps {
                         echo "Image does not exist. Running Trivy scan before push..."
 
+                        runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
                         // script {
                         //     runTrivyScan(
                         //         stageName: "before-push",
@@ -230,7 +231,7 @@ pipeline {
                     }
                     steps {
                         echo "Running Trivy scan after push..."
-
+                        runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
                         // script {
                         //     runTrivyScan(
                         //         stageName: "after-push",
