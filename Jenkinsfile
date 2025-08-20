@@ -87,7 +87,12 @@ pipeline {
                     steps {
                         echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
-                        runTrivyScanUnified("filesystem-scan",".", "fs")
+                        runTrivyScanUnified(
+                            stageName: "filesystem-scan",
+                            scanTarget: ".",
+                            scanType: "fs",
+                            fileName = env.COMMIT_SHA.take(8)
+                        )
                     }
                 }
             }
@@ -142,17 +147,28 @@ pipeline {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
+                    when {
+                        expression { return !env.ECR_IMAGE_DIGEST }
+                    }
                     steps {
-                        echo "Running Trivy scan before push..."
-                        runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                        echo "Image does not exist. Running Trivy scan before push..."
+                        runTrivyScanUnified(
+                            stageName: "before-push",
+                            scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                            scanType: "image",
+                            fileName = env.COMMIT_SHA.take(8)
+                        )
                     }
                 }
                 stage('Snyk Before Push') {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
+                    when {
+                        expression { return !env.ECR_IMAGE_DIGEST }
+                    }
                     steps {
-                        echo "Running Snyk scan before push..."
+                        echo "Image does not exist. Running Snyk scan before push..."
                         runSnykScan(
                             stageName: "before-push",
                             imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
@@ -207,8 +223,12 @@ pipeline {
                     }
                     steps {
                         echo "Running Trivy scan after push..."
-                        runTrivyScanUnified("after-push",
-                            "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                        runTrivyScanUnified(
+                            stageName: "after-push",
+                            scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                            scanType: "image",
+                            fileName = env.ECR_IMAGE_DIGEST
+                        )
                     }
                 }
                 stage('Snyk After Push') {
