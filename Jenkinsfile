@@ -249,9 +249,9 @@ pipeline {
         stage('Update Deployment Files') {
             steps {
                 script {
-                    echo "Updating deployment YAML with image tag: ${env.COMMIT_SHA}"
+                    echo "Updating deployment YAML with image tag: ${env.ECR_IMAGE_DIGEST}"
                     updateImageTag(
-                        imageTag: env.COMMIT_SHA,
+                        imageTag: env.ECR_IMAGE_DIGEST,
                         secretName: 'my-app/secrets'
                     )
                 }
@@ -296,7 +296,7 @@ pipeline {
                 script {
                     echo "Cleaning up Docker images..."
                     cleanupDockerImages(
-                        imageTag: env.COMMIT_SHA,
+                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
                         repoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION
