@@ -29,7 +29,7 @@ pipeline {
         maven 'Maven3'
     }
 
-    stages {       
+    stages {
         stage('Init & Checkout') {
             steps {
                 echo "Cleaning workspace..."
@@ -41,7 +41,7 @@ pipeline {
                         env.COMMIT_SHA = params.COMMIT_SHA ?: sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                     } catch (Exception e) {
                         currentBuild.result = 'FAILURE'
-                        error("Stopping pipeline due to checkout failure")
+                        error("Stopping pipeline due to checkout failure: ${e.message}")
                     }
                 }
             }
@@ -63,23 +63,6 @@ pipeline {
 
         stage('SBOM + FS Scan') {
             parallel {
-                // stage('Publish SBOM') {
-                //     steps {
-                //         script {
-                //             if (!fileExists('target/bom.xml')) {
-                //                 error "SBOM file target/bom.xml not found!"
-                //             }
-                //             echo "Uploading SBOM to Dependency Track..."
-                //             uploadSbomToDependencyTrack(
-                //                 sbomFile: 'target/bom.xml',
-                //                 projectName: "${params.ECR_REPO_NAME}",
-                //                 projectVersion: "${env.COMMIT_SHA.take(8)}",
-                //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
-                //                 secretName: 'my-app/secrets'
-                //             )
-                //         }
-                //     }
-                // }
                 stage('Trivy FS Scan') {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
@@ -87,49 +70,18 @@ pipeline {
                     steps {
                         echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
-                        
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
-                            runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
+                            runTrivyScanUnified("filesystem-scan", ".", "fs", shortSha)
                         }
                     }
                 }
             }
         }
 
-        // stage('SonarQube Analysis & Gate') {
-        //     steps {
-        //         echo "Running SonarQube scan..."
-        //         sonarScan(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             sources: 'src/main/java,src/test/java',
-        //             binaries: 'target/classes',
-        //             exclusions: '**/*.js',
-        //             scannerTool: 'sonar-scanner',
-        //             sonarEnv: 'sonar-server',
-        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
-        //         )
-        //         echo "Checking SonarQube quality gate..."
-        //         sonarQualityGateCheck(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             secretName: 'my-app/secrets',
-        //             timeoutMinutes: 5
-        //         )
-        //     }
-        // }
-
-        // stage('Build Docker Image') {
-        //     steps {
-        //          script {
-        //             def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-        //             buildDockerImage(localImageTag)
-        //          }
-        //     }
-        // }
-
         stage('Build Docker Image') {
             steps {
-                 script {
+                script {
                     def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                     
                     env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
@@ -140,19 +92,16 @@ pipeline {
                     ) ?: ''
 
                     if (env.ECR_IMAGE_DIGEST) {
-
                         echo "Docker image already exists with digest: ${env.ECR_IMAGE_DIGEST}. Pulling image..."
-                
-                        // Pull image from ECR if it already exists
                         sh """
                             aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
                             docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
-                        """                        
+                        """
                     } else {
                         echo "Image does not exist. Building new Docker image..."
                         buildDockerImage(localImageTag)
                     }
-                 }
+                }
             }
         }
 
@@ -166,17 +115,16 @@ pipeline {
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
                             def imageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                    
-                            // Ensure the image is pulled before scanning
                             echo "Pulling image ${imageTag} from ECR for Trivy scan..."
                             sh """
                                 aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
                                 docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${imageTag}
                             """
-                            runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
+                            runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
                         }
                     }
                 }
+
                 stage('Snyk Before Push') {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
@@ -184,43 +132,21 @@ pipeline {
                     steps {
                         script {
                             def imageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                            
-                            // Ensure the image is pulled before scanning
                             echo "Pulling image ${imageTag} from ECR for Snyk scan..."
                             sh """
                                 aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
                                 docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${imageTag}
                             """
-                            
                             runSnykScan(
                                 stageName: "before-push",
                                 imageTag: imageTag,
                                 secretName: 'my-app/secrets'
                             )
                         }
-                        // runSnykScan(
-                        //     stageName: "before-push",
-                        //     imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                        //     secretName: 'my-app/secrets'
-                        // )
                     }
                 }
             }
         }
-
-        // stage('Docker Push & Digest') {
-        //     steps {
-        //         script {
-        //             dockerPush(
-        //                 imageTag: env.COMMIT_SHA.take(8),
-        //                 ecrRepoName: params.ECR_REPO_NAME,
-        //                 awsAccountId: params.AWS_ACCOUNT_ID,
-        //                 region: env.REGION,
-        //                 secretName: 'my-app/secrets'
-        //             )
-        //         }
-        //     }
-        // }
 
         stage('Docker Push & Digest') {
             steps {
@@ -239,20 +165,6 @@ pipeline {
                 }
             }
         }
-
-        // stage('Sign Image with Cosign') {
-        //     steps {
-        //         script {
-        //             signImageWithCosign(
-        //                 imageTag: env.COMMIT_SHA.take(8),
-        //                 ecrRepoName: params.ECR_REPO_NAME,
-        //                 awsAccountId: params.AWS_ACCOUNT_ID,
-        //                 region: env.REGION,
-        //                 cosignPassword: COSIGN_PASSWORD
-        //             )
-        //         }
-        //     }
-        // }
 
         stage('Sign Image with Cosign') {
             steps {
@@ -286,6 +198,7 @@ pipeline {
                         }
                     }
                 }
+
                 stage('Snyk After Push') {
                     options {
                         timeout(time: 15, unit: 'MINUTES')
@@ -295,35 +208,17 @@ pipeline {
                             echo "Running Snyk scan after push..."
                             script {
                                 def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
-                            //runTrivyScanUnified("after-push", imageRef, "image", env.ECR_IMAGE_DIGEST)
-                            //}
-
                                 runSnykScan(
                                     stageName: "after-push",
                                     imageTag: imageRef,
                                     secretName: 'my-app/secrets'
                                 )
-
-                                // runSnykScan(
-                                //     stageName: "after-push",
-                                //     imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                                //     secretName: 'my-app/secrets'
-                                // )
                             }
                         }
                     }
                 }
             }
         }
-
-        // stage('Confirm YAML Update') {
-        //     steps {
-        //         script {
-        //             def approver = confirmYamlUpdate()
-        //             echo "YAML update approved by: ${approver}"
-        //         }
-        //     }
-        // }
 
         stage('Update Deployment Files') {
             steps {
@@ -336,39 +231,6 @@ pipeline {
                 }
             }
         }
-
-        // stage('Deploy App') {
-        //     steps {
-        //         echo "Deploying application..."
-        //         deployApp()
-        //     }
-        // }
-
-         // stage('Generate GPT Security Report') {
-        //     steps {
-        //         script {
-
-        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA.take(8)}.html"
-        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA.take(8)}.json"
-
-        //             if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
-        //                 echo "Generating GPT security report..."
-        //                 runGptSecuritySummary(
-        //                     projectKey: env.SONAR_PROJECT_KEY, 
-        //                     gitSha: "${env.COMMIT_SHA.take(8)}",
-        //                     buildNumber: "${env.BUILD_NUMBER}",
-        //                     trivyHtmlPath: trivyHtmlPath,
-        //                     snykJsonPath: snykJsonPath,
-        //                     sonarHost: "${env.SONAR_HOST}",
-        //                     secretName: 'my-app/secrets'
-        //                 )
-
-        //             } else {
-        //                 error("Missing scan reports.")
-        //             }
-        //         }   
-        //     } 
-        // }
 
         stage('Cleanup') {
             steps {
@@ -383,7 +245,6 @@ pipeline {
                 }
             }
         }
-
     }
 
     post {
@@ -395,12 +256,6 @@ pipeline {
         success {
             script {
                 echo "Build SUCCESS - sending reports and notifications..."
-                // sendAiReportEmail(
-                //     branch: params.BRANCH,
-                //     commit: env.COMMIT_SHA.take(8) ?: 'unknown',
-                //     to: 'naveenramlu@gmail.com'
-                // )
-
                 sendSlackNotification(
                     status: 'SUCCESS',
                     color: 'good',
@@ -439,7 +294,7 @@ pipeline {
                 echo "Build ABORTED - sending aborted notification..."
                 sendSlackNotification(
                     status: 'ABORTED',
-                    color: '#808080',
+                    color: 'danger',
                     channel: env.SLACK_CHANNEL,
                     secretName: 'my-app/secrets'
                 )
@@ -447,6 +302,3 @@ pipeline {
         }
     }
 }
-
-
-
