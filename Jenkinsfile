@@ -87,12 +87,21 @@ pipeline {
                     steps {
                         echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
-                        runTrivyScanUnified(
-                            stageName: "filesystem-scan",
-                            scanTarget: ".",
-                            scanType: "fs",
-                            fileName = env.COMMIT_SHA.take(8)
-                        )
+                        
+                        script {
+                            runTrivyScan(
+                                stageName: "filesystem-scan",
+                                scanTarget: ".",
+                                scanType: "fs",
+                                fileName: env.COMMIT_SHA.take(8)
+                            )
+                        }
+                        // runTrivyScan(
+                        //     stageName: "filesystem-scan",
+                        //     scanTarget: ".",
+                        //     scanType: "fs",
+                        //     fileName = env.COMMIT_SHA.take(8)
+                        // )
                     }
                 }
             }
@@ -152,12 +161,22 @@ pipeline {
                     }
                     steps {
                         echo "Image does not exist. Running Trivy scan before push..."
-                        runTrivyScanUnified(
-                            stageName: "before-push",
-                            scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                            scanType: "image",
-                            fileName = env.COMMIT_SHA.take(8)
-                        )
+
+                        script {
+                            runTrivyScan(
+                                stageName: "before-push",
+                                scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                                scanType: "image",
+                                fileName: env.COMMIT_SHA.take(8)
+                            )
+                        }
+                        
+                        // runTrivyScan(
+                        //     stageName: "before-push",
+                        //     scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                        //     scanType: "image",
+                        //     fileName = env.COMMIT_SHA.take(8)
+                        // )
                     }
                 }
                 stage('Snyk Before Push') {
@@ -223,12 +242,21 @@ pipeline {
                     }
                     steps {
                         echo "Running Trivy scan after push..."
-                        runTrivyScanUnified(
-                            stageName: "after-push",
-                            scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                            scanType: "image",
-                            fileName = env.ECR_IMAGE_DIGEST
-                        )
+
+                        script {
+                            runTrivyScan(
+                                stageName: "after-push",
+                                scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                                scanType: "image",
+                                fileName: env.ECR_IMAGE_DIGEST
+                            )
+                        }
+                        // runTrivyScan(
+                        //     stageName: "after-push",
+                        //     scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                        //     scanType: "image",
+                        //     fileName = env.ECR_IMAGE_DIGEST
+                        // )
                     }
                 }
                 stage('Snyk After Push') {
