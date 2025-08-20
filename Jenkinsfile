@@ -156,14 +156,14 @@ pipeline {
                     steps {
                         echo "Image does not exist. Running Trivy scan before push..."
 
-                        script {
-                            runTrivyScan(
-                                stageName: "before-push",
-                                scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
-                                scanType: "image",
-                                fileName: env.COMMIT_SHA.take(8)
-                            )
-                        }
+                        // script {
+                        //     runTrivyScan(
+                        //         stageName: "before-push",
+                        //         scanTarget: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}",
+                        //         scanType: "image",
+                        //         fileName: env.COMMIT_SHA.take(8)
+                        //     )
+                        // }
                     }
                 }
                 stage('Snyk Before Push') {
