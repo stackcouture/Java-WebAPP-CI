@@ -21,8 +21,6 @@ pipeline {
         DEPENDENCY_TRACK_URL = 'http://15.207.71.114:8081/api/v1/bom'
         SONAR_HOST = "http://13.127.193.165:9000"
         SONAR_PROJECT_KEY = 'Java-App'
-        COSIGN_PASSWORD = "admin123"
-        ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
     }
 
     tools {
@@ -64,6 +62,23 @@ pipeline {
 
         stage('SBOM + FS Scan') {
             parallel {
+                // stage('Publish SBOM') {
+                //     steps {
+                //         script {
+                //             if (!fileExists('target/bom.xml')) {
+                //                 error "SBOM file target/bom.xml not found!"
+                //             }
+                //             echo "Uploading SBOM to Dependency Track..."
+                //             uploadSbomToDependencyTrack(
+                //                 sbomFile: 'target/bom.xml',
+                //                 projectName: "${params.ECR_REPO_NAME}",
+                //                 projectVersion: "${env.COMMIT_SHA.take(8)}",
+                //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+                //                 secretName: 'my-app/secrets'
+                //             )
+                //         }
+                //     }
+                // }
                 stage('Trivy FS Scan') {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
@@ -81,6 +96,28 @@ pipeline {
             }
         }
 
+        // stage('SonarQube Analysis & Gate') {
+        //     steps {
+        //         echo "Running SonarQube scan..."
+        //         sonarScan(
+        //             projectKey: env.SONAR_PROJECT_KEY,
+        //             sources: 'src/main/java,src/test/java',
+        //             binaries: 'target/classes',
+        //             exclusions: '**/*.js',
+        //             scannerTool: 'sonar-scanner',
+        //             sonarEnv: 'sonar-server',
+        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
+        //         )
+        //         echo "Checking SonarQube quality gate..."
+        //         sonarQualityGateCheck(
+        //             projectKey: env.SONAR_PROJECT_KEY,
+        //             secretName: 'my-app/secrets',
+        //             timeoutMinutes: 5
+        //         )
+        //     }
+        // }
+
+
         stage('Build Docker Image') {
             steps {
                 script {
@@ -88,17 +125,9 @@ pipeline {
                     echo "Building Docker image locally..."
                     buildDockerImage(localImageTag)
                     env.IMAGE_TAG = localImageTag
-
-                     env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
-                        params.ECR_REPO_NAME, 
-                        env.COMMIT_SHA.take(8), 
-                        params.AWS_ACCOUNT_ID, 
-                        env.REGION
-                    ) ?: ''
                 }
             }
         }
-    
 
         stage('Security Scans Before Push') {
             parallel {
@@ -107,25 +136,115 @@ pipeline {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
-                        script {
-                            def shortSha = env.COMMIT_SHA.take(8)
-                            def imageTag = env.IMAGE_TAG
-                            runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
-                        }
+                        echo "Running Trivy scan before push..."
+                        runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
                     }
                 }
-
                 stage('Snyk Before Push') {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
                     }
                     steps {
-                        script {
-                            echo "Running Snyk scan on the locally built image..."
+                        echo "Running Snyk scan before push..."
+                        runSnykScan(
+                            stageName: "before-push",
+                            imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
+                            secretName: 'my-app/secrets'
+                        )
+                    }
+                }
+            }
+        }
 
+        // stage('Security Scans Before Push') {
+        //     parallel {
+        //         stage('Trivy Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     def shortSha = env.COMMIT_SHA.take(8)
+        //                     def imageTag = env.IMAGE_TAG
+        //                     runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
+        //                 }
+        //             }
+        //         }
+
+        //         stage('Snyk Before Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 script {
+        //                     echo "Running Snyk scan on the locally built image..."
+
+        //                     runSnykScan(
+        //                         stageName: "before-push",
+        //                         imageTag: env.IMAGE_TAG,
+        //                         secretName: 'my-app/secrets'
+        //                     )
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        // stage('Docker Push & Digest') {
+        //     steps {
+        //         script {
+        //             if (env.ECR_IMAGE_DIGEST) {
+        //                 echo "Image already pushed to ECR with digest: ${env.ECR_IMAGE_DIGEST}. Skipping push."
+        //             } else {
+        //                 dockerPush(
+        //                     imageTag: env.COMMIT_SHA.take(8),
+        //                     ecrRepoName: params.ECR_REPO_NAME,
+        //                     awsAccountId: params.AWS_ACCOUNT_ID,
+        //                     region: env.REGION,
+        //                     secretName: 'my-app/secrets'
+        //                 )
+        //             }
+        //         }
+        //     }
+        // }
+
+        stage('Docker Push') {
+            steps {
+                script {
+                    echo "Pushing Docker image: ${env.COMMIT_SHA}"
+                    dockerPush(
+                        imageTag: "${env.COMMIT_SHA}",
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
+                        region: "${env.REGION}",
+                        secretName: 'my-app/secrets'
+                    )
+                }
+            }
+        }
+
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                        options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy scan after push..."
+                        runTrivyScanUnified("after-push",
+                            "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
+                    }
+                }
+                stage('Snyk After Push') {
+                        options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        retry(2) {
+                            echo "Running Snyk scan after push..."
                             runSnykScan(
-                                stageName: "before-push",
-                                imageTag: env.IMAGE_TAG,
+                                stageName: "after-push",
+                                imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
                                 secretName: 'my-app/secrets'
                             )
                         }
@@ -134,78 +253,50 @@ pipeline {
             }
         }
 
-        stage('Docker Push & Digest') {
-            steps {
-                script {
-                    if (env.ECR_IMAGE_DIGEST) {
-                        echo "Image already pushed to ECR with digest: ${env.ECR_IMAGE_DIGEST}. Skipping push."
-                    } else {
-                        dockerPush(
-                            imageTag: env.COMMIT_SHA.take(8),
-                            ecrRepoName: params.ECR_REPO_NAME,
-                            awsAccountId: params.AWS_ACCOUNT_ID,
-                            region: env.REGION,
-                            secretName: 'my-app/secrets'
-                        )
-                    }
-                }
-            }
-        }
+        // stage('Security Scans After Push') {
+        //     parallel {
+        //         stage('Trivy After Push') {
+        //             options {
+        //                 timeout(time: 10, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 echo "Running Trivy scan after push..."
+        //                 script {
+        //                     def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
+        //                     runTrivyScanUnified("after-push", imageRef, "image", env.ECR_IMAGE_DIGEST)
+        //                 }
+        //             }
+        //         }
 
-        stage('Sign Image with Cosign') {
-            steps {
-                script {
-                    if (env.ECR_IMAGE_DIGEST) {
-                        echo "Image already signed with digest: ${env.ECR_IMAGE_DIGEST}. Skipping signing."
-                    } else {
-                        env.signedImaged = signImageWithCosign(
-                            imageTag: env.COMMIT_SHA.take(8),
-                            ecrRepoName: params.ECR_REPO_NAME,
-                            awsAccountId: params.AWS_ACCOUNT_ID,
-                            region: env.REGION,
-                            cosignPassword: COSIGN_PASSWORD
-                        )
-                        echo "Signed Imaged Diges ${env.signedImaged}"
-                    }
-                }
-            }
-        }
+        //         stage('Snyk After Push') {
+        //             options {
+        //                 timeout(time: 15, unit: 'MINUTES')
+        //             }
+        //             steps {
+        //                 retry(2) {
+        //                     echo "Running Snyk scan after push..."
+        //                     script {
+        //                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
+        //                         runSnykScan(
+        //                             stageName: "after-push",
+        //                             imageTag: imageRef,
+        //                             secretName: 'my-app/secrets'
+        //                         )
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
-        stage('Security Scans After Push') {
-            parallel {
-                stage('Trivy After Push') {
-                    options {
-                        timeout(time: 10, unit: 'MINUTES')
-                    }
-                    steps {
-                        echo "Running Trivy scan after push..."
-                        script {
-                            def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
-                            runTrivyScanUnified("after-push", imageRef, "image", env.ECR_IMAGE_DIGEST)
-                        }
-                    }
-                }
-
-                stage('Snyk After Push') {
-                    options {
-                        timeout(time: 15, unit: 'MINUTES')
-                    }
-                    steps {
-                        retry(2) {
-                            echo "Running Snyk scan after push..."
-                            script {
-                                def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
-                                runSnykScan(
-                                    stageName: "after-push",
-                                    imageTag: imageRef,
-                                    secretName: 'my-app/secrets'
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // stage('Confirm YAML Update') {
+        //     steps {
+        //         script {
+        //             def approver = confirmYamlUpdate()
+        //             echo "YAML update approved by: ${approver}"
+        //         }
+        //     }
+        // }
 
         stage('Update Deployment Files') {
             steps {
@@ -218,6 +309,39 @@ pipeline {
                 }
             }
         }
+
+         // stage('Deploy App') {
+        //     steps {
+        //         echo "Deploying application..."
+        //         deployApp()
+        //     }
+        // }
+
+        // stage('Generate GPT Security Report') {
+        //     steps {
+        //         script {
+
+        //             def trivyHtmlPath = "reports/trivy/${env.BUILD_NUMBER}/after-push/trivy-image-scan-${env.COMMIT_SHA}.html"
+        //             def snykJsonPath = "reports/snyk/${env.BUILD_NUMBER}/after-push/snyk-report-${env.COMMIT_SHA}.json"
+
+        //             if (fileExists(trivyHtmlPath) && fileExists(snykJsonPath)) {
+        //                 echo "Generating GPT security report..."
+        //                 runGptSecuritySummary(
+        //                     projectKey: env.SONAR_PROJECT_KEY, 
+        //                     gitSha: "${env.COMMIT_SHA}",
+        //                     buildNumber: "${env.BUILD_NUMBER}",
+        //                     trivyHtmlPath: trivyHtmlPath,
+        //                     snykJsonPath: snykJsonPath,
+        //                     sonarHost: "${env.SONAR_HOST}",
+        //                     secretName: 'my-app/secrets'
+        //                 )
+
+        //             } else {
+        //                 error("Missing scan reports.")
+        //             }
+        //         }   
+        //     } 
+        // }
 
         stage('Cleanup') {
             steps {
@@ -243,6 +367,12 @@ pipeline {
         success {
             script {
                 echo "Build SUCCESS - sending reports and notifications..."
+                // sendAiReportEmail(
+                //     branch: params.BRANCH,
+                //     commit: env.COMMIT_SHA ?: 'unknown',
+                //     to: 'naveenramlu@gmail.com'
+                // )
+
                 sendSlackNotification(
                     status: 'SUCCESS',
                     color: 'good',
