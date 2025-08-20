@@ -158,9 +158,9 @@ pipeline {
         stage('Docker Push') {
             steps {
                 script {
-                    echo "Pushing Docker image: ${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+                    echo "Pushing Docker image with tag: ${env.IMAGE_TAG}"
                     dockerPush(
-                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        imageTag: "${env.IMAGE_TAG}"
                         ecrRepoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: "${env.REGION}",
