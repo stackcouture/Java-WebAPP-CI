@@ -18,8 +18,8 @@ pipeline {
         REGION = 'ap-south-1'
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#java-app'
-        DEPENDENCY_TRACK_URL = 'http://15.207.71.114:8081/api/v1/bom'
-        SONAR_HOST = "http://13.127.193.165:9000"
+        DEPENDENCY_TRACK_URL = 'http://13.201.83.121:8081/api/v1/bom'
+        SONAR_HOST = "http://52.66.15.110:9000"
         SONAR_PROJECT_KEY = 'Java-App'
     }
 
@@ -62,23 +62,23 @@ pipeline {
 
         stage('SBOM + FS Scan') {
             parallel {
-                // stage('Publish SBOM') {
-                //     steps {
-                //         script {
-                //             if (!fileExists('target/bom.xml')) {
-                //                 error "SBOM file target/bom.xml not found!"
-                //             }
-                //             echo "Uploading SBOM to Dependency Track..."
-                //             uploadSbomToDependencyTrack(
-                //                 sbomFile: 'target/bom.xml',
-                //                 projectName: "${params.ECR_REPO_NAME}",
-                //                 projectVersion: "${env.COMMIT_SHA}",
-                //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
-                //                 secretName: 'my-app/secrets'
-                //             )
-                //         }
-                //     }
-                // }
+                stage('Publish SBOM') {
+                    steps {
+                        script {
+                            if (!fileExists('target/bom.xml')) {
+                                error "SBOM file target/bom.xml not found!"
+                            }
+                            echo "Uploading SBOM to Dependency Track..."
+                            uploadSbomToDependencyTrack(
+                                sbomFile: 'target/bom.xml',
+                                projectName: "${params.ECR_REPO_NAME}",
+                                projectVersion: "${env.COMMIT_SHA}",
+                                dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+                                secretName: 'my-app/secrets'
+                            )
+                        }
+                    }
+                }
                 stage('Trivy FS Scan') {
                     options {
                         timeout(time: 10, unit: 'MINUTES')
@@ -95,27 +95,26 @@ pipeline {
             }
         }
 
-        // stage('SonarQube Analysis & Gate') {
-        //     steps {
-        //         echo "Running SonarQube scan..."
-        //         sonarScan(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             sources: 'src/main/java,src/test/java',
-        //             binaries: 'target/classes',
-        //             exclusions: '**/*.js',
-        //             scannerTool: 'sonar-scanner',
-        //             sonarEnv: 'sonar-server',
-        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
-        //         )
-        //         echo "Checking SonarQube quality gate..."
-        //         sonarQualityGateCheck(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             secretName: 'my-app/secrets',
-        //             timeoutMinutes: 5
-        //         )
-        //     }
-        // }
-
+        stage('SonarQube Analysis & Gate') {
+            steps {
+                echo "Running SonarQube scan..."
+                sonarScan(
+                    projectKey: env.SONAR_PROJECT_KEY,
+                    sources: 'src/main/java,src/test/java',
+                    binaries: 'target/classes',
+                    exclusions: '**/*.js',
+                    scannerTool: 'sonar-scanner',
+                    sonarEnv: 'sonar-server',
+                    jacocoReportPath: 'target/site/jacoco/jacoco.xml'
+                )
+                echo "Checking SonarQube quality gate..."
+                sonarQualityGateCheck(
+                    projectKey: env.SONAR_PROJECT_KEY,
+                    secretName: 'my-app/secrets',
+                    timeoutMinutes: 5
+                )
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
@@ -154,58 +153,6 @@ pipeline {
                 }
             }
         }
-
-        // stage('Security Scans Before Push') {
-        //     parallel {
-        //         stage('Trivy Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 script {
-        //                     def shortSha = env.COMMIT_SHA
-        //                     def imageTag = env.IMAGE_TAG
-        //                     runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
-        //                 }
-        //             }
-        //         }
-
-        //         stage('Snyk Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 script {
-        //                     echo "Running Snyk scan on the locally built image..."
-
-        //                     runSnykScan(
-        //                         stageName: "before-push",
-        //                         imageTag: env.IMAGE_TAG,
-        //                         secretName: 'my-app/secrets'
-        //                     )
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        // stage('Docker Push & Digest') {
-        //     steps {
-        //         script {
-        //             if (env.ECR_IMAGE_DIGEST) {
-        //                 echo "Image already pushed to ECR with digest: ${env.ECR_IMAGE_DIGEST}. Skipping push."
-        //             } else {
-        //                 dockerPush(
-        //                     imageTag: env.COMMIT_SHA,
-        //                     ecrRepoName: params.ECR_REPO_NAME,
-        //                     awsAccountId: params.AWS_ACCOUNT_ID,
-        //                     region: env.REGION,
-        //                     secretName: 'my-app/secrets'
-        //                 )
-        //             }
-        //         }
-        //     }
-        // }
 
         stage('Docker Push') {
             steps {
@@ -252,50 +199,14 @@ pipeline {
             }
         }
 
-        // stage('Security Scans After Push') {
-        //     parallel {
-        //         stage('Trivy After Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Trivy scan after push..."
-        //                 script {
-        //                     def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
-        //                     runTrivyScanUnified("after-push", imageRef, "image", env.ECR_IMAGE_DIGEST)
-        //                 }
-        //             }
-        //         }
-
-        //         stage('Snyk After Push') {
-        //             options {
-        //                 timeout(time: 15, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 retry(2) {
-        //                     echo "Running Snyk scan after push..."
-        //                     script {
-        //                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.ECR_IMAGE_DIGEST}"
-        //                         runSnykScan(
-        //                             stageName: "after-push",
-        //                             imageTag: imageRef,
-        //                             secretName: 'my-app/secrets'
-        //                         )
-        //                     }
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        // stage('Confirm YAML Update') {
-        //     steps {
-        //         script {
-        //             def approver = confirmYamlUpdate()
-        //             echo "YAML update approved by: ${approver}"
-        //         }
-        //     }
-        // }
+        stage('Confirm YAML Update') {
+            steps {
+                script {
+                    def approver = confirmYamlUpdate()
+                    echo "YAML update approved by: ${approver}"
+                }
+            }
+        }
 
         stage('Update Deployment Files') {
             steps {
@@ -309,12 +220,12 @@ pipeline {
             }
         }
 
-         // stage('Deploy App') {
-        //     steps {
-        //         echo "Deploying application..."
-        //         deployApp()
-        //     }
-        // }
+        stage('Deploy App') {
+            steps {
+                echo "Deploying application..."
+                deployApp()
+            }
+        }
 
         // stage('Generate GPT Security Report') {
         //     steps {
