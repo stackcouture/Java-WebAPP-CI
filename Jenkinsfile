@@ -88,8 +88,10 @@ pipeline {
                         echo "Running Trivy filesystem scan..."
                         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         
-                        def shortSha = env.COMMIT_SHA.take(8)
-                        runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
+                        script {
+                            def shortSha = env.COMMIT_SHA.take(8)
+                            runTrivyScanUnified("filesystem-scan",".", "fs", shortSha)
+                        }
                         // script {
                         //     runTrivyScan(
                         //         stageName: "filesystem-scan",
@@ -157,8 +159,10 @@ pipeline {
                     }
                     steps {
                         echo "Image does not exist. Running Trivy scan before push..."
-                        def shortSha = env.COMMIT_SHA.take(8)
-                        runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
+                        script {
+                            def shortSha = env.COMMIT_SHA.take(8)
+                            runTrivyScanUnified("before-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
+                        }
                     }
                 }
                 stage('Snyk Before Push') {
