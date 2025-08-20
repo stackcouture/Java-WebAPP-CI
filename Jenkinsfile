@@ -22,6 +22,8 @@ pipeline {
         SONAR_HOST = "http://13.127.193.165:9000"
         SONAR_PROJECT_KEY = 'Java-App'
         COSIGN_PASSWORD = "admin123"
+        ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
+        IMAGE_TAG = "${ECR_REPO_NAME}:${params.COMMIT_SHA.take(8)}"
     }
 
     tools {
@@ -84,21 +86,22 @@ pipeline {
                 script {
                     def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
                     
+                    echo "Checking if ECR image exists..."
                     env.ECR_IMAGE_DIGEST = checkEcrDigestExists(
                         params.ECR_REPO_NAME, 
                         env.COMMIT_SHA.take(8), 
                         params.AWS_ACCOUNT_ID, 
                         env.REGION
                     ) ?: ''
-
+                    
                     if (env.ECR_IMAGE_DIGEST) {
-                        echo "Docker image already exists with digest: ${env.ECR_IMAGE_DIGEST}. Pulling image..."
+                        echo "Docker image exists with digest: ${env.ECR_IMAGE_DIGEST}. Pulling image..."
                         sh """
                             aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
                             docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
                         """
                     } else {
-                        echo "Image does not exist. Building new Docker image..."
+                        echo "Docker image does not exist. Building a new Docker image..."
                         buildDockerImage(localImageTag)
                     }
                 }
@@ -114,13 +117,12 @@ pipeline {
                     steps {
                         script {
                             def shortSha = env.COMMIT_SHA.take(8)
-                            def imageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                            echo "Pulling image ${imageTag} from ECR for Trivy scan..."
+                            echo "Pulling image ${env.IMAGE_TAG} from ECR for Trivy scan..."
                             sh """
-                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
-                                docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${imageTag}
+                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${env.ECR_URI}
+                                docker pull ${env.ECR_URI}/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
                             """
-                            runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image", shortSha)
+                            runTrivyScanUnified("before-push", env.IMAGE_TAG, "image", shortSha)
                         }
                     }
                 }
@@ -131,15 +133,14 @@ pipeline {
                     }
                     steps {
                         script {
-                            def imageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}"
-                            echo "Pulling image ${imageTag} from ECR for Snyk scan..."
+                            echo "Pulling image ${env.IMAGE_TAG} from ECR for Snyk scan..."
                             sh """
-                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com
-                                docker pull ${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${imageTag}
+                                aws ecr get-login-password --region ${env.REGION} | docker login --username AWS --password-stdin ${env.ECR_URI}
+                                docker pull ${env.ECR_URI}/${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}
                             """
                             runSnykScan(
                                 stageName: "before-push",
-                                imageTag: imageTag,
+                                imageTag: env.IMAGE_TAG,
                                 secretName: 'my-app/secrets'
                             )
                         }
