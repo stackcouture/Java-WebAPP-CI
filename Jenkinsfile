@@ -120,7 +120,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                     echo "Building Docker image locally..."
                     buildDockerImage(localImageTag)
                     env.IMAGE_TAG = localImageTag
@@ -208,10 +208,8 @@ pipeline {
                 // withCredentials([file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY')]) {
                     script {
                         // Get the image digest
-
-                        def imageTag = "${env.COMMIT_SHA}-${env.BUILD_NUMBER}"
                         def imageDigest = sh(script: """
-                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${imageTag} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
+                            aws ecr describe-images --repository-name ${params.ECR_REPO_NAME} --image-ids imageTag=${env.IMAGE_TAG} --region ${env.REGION} --query 'imageDetails[0].imageDigest' --output text
                         """, returnStdout: true).trim()
 
                         def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
@@ -296,7 +294,7 @@ pipeline {
                 script {
                     echo "Cleaning up Docker images..."
                     cleanupDockerImages(
-                        imageTag: "${env.COMMIT_SHA}-${env.BUILD_NUMBER}",
+                        imageTag: "${env.COMMIT_SHA}",
                         repoName: params.ECR_REPO_NAME,
                         awsAccountId: params.AWS_ACCOUNT_ID,
                         region: env.REGION
