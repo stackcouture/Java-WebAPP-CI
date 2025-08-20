@@ -228,7 +228,12 @@ pipeline {
                     }
                     steps {
                         echo "Running Trivy scan after push..."
-                        // runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                        // script {
+                        //     def imageRef = "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${imageDigest}"
+                        //     runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                        //    // runTrivyScanUnified("after-push","${params.ECR_REPO_NAME}:${env.COMMIT_SHA.take(8)}", "image")
+                        // }
+                        // 
                         // script {
                         //     runTrivyScan(
                         //         stageName: "after-push",
