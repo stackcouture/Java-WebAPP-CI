@@ -5,46 +5,45 @@ services:
     image: mysql:8
     container_name: mysql-container
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: springboot_db
-      MYSQL_USER: springuser
-      MYSQL_PASSWORD: springpass
+      MYSQL_ROOT_PASSWORD: rootpass         # Set root password for MySQL
+      MYSQL_DATABASE: springboot_db         # Create the database at startup
+      MYSQL_USER: springuser                # Set user
+      MYSQL_PASSWORD: springpass            # Set password for springuser
     ports:
-      - "3306:3306"
+      - "3306:3306"                         # Expose MySQL on the host
     volumes:
-      - mysql-data:/var/lib/mysql
+      - mysql-data:/var/lib/mysql          # Volume for data persistence
     networks:
       - spring-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "springuser", "-p$MYSQL_PASSWORD"]
-      interval: 30s
-      retries: 5
-      timeout: 30s
-      start_period: 10s
-      version: 3
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "springuser", "--password=springpass"]
+      interval: 30s                         # Wait 30 seconds before the next health check
+      retries: 5                            # Retry 5 times before marking unhealthy
+      timeout: 30s                          # Timeout after 30 seconds
+      start_period: 60s                     # Wait 1 minute before starting health check
 
   springboot-app:
-    build: .
+    build: .                               # Use the current directory Dockerfile
     container_name: springboot-container
     ports:
-      - "8080:8080"
+      - "8080:8080"                        # Expose Spring Boot app on port 8080
     depends_on:
       mysql:
-        condition: service_healthy  # Ensures MySQL is healthy before starting Spring Boot
+        condition: service_healthy         # Wait for MySQL to be healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/springboot_db
-      SPRING_DATASOURCE_USERNAME: springuser
-      SPRING_DATASOURCE_PASSWORD: springpass
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update  # Ensures schema is updated automatically
-      SPRING_JPA_SHOW_SQL: true            # Optional: Enable SQL logging in console
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQL8Dialect
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/springboot_db  # MySQL connection string
+      SPRING_DATASOURCE_USERNAME: springuser                         # MySQL username
+      SPRING_DATASOURCE_PASSWORD: springpass                         # MySQL password
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update                          # Auto-update schema
+      SPRING_JPA_SHOW_SQL: true                                       # Enable SQL logging
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect  # Use MySQL 8 dialect
     networks:
       - spring-net
-    restart: always  # Always restart the app if it crashes
+    restart: always                      # Always restart the Spring Boot app if it crashes
 
 volumes:
-  mysql-data:
+  mysql-data:                            # MySQL persistent storage
 
 networks:
-  spring-net:
+  spring-net:                             # Network configuration for isolation
     driver: bridge
