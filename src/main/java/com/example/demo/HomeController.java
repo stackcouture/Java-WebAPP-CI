@@ -7,11 +7,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 public class HomeController {
 
     @GetMapping("/")
-    // public String home() {
-    //     // This returns the 'home.html' template located in src/main/resources/templates
-    //     return "home";
-    // }
-
     public String home() {
         return "index";
     }
@@ -38,12 +33,5 @@ public class HomeController {
     @GetMapping("/shop")
     public String shop() {
         return "shop";
-    }
-
-    // Contact Page
-    @GetMapping("/contact")
-    public String contact() {
-        model.addAttribute("contactMessage", new ContactMessage());
-        return "contact";
     }
 }
