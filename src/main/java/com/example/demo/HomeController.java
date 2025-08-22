@@ -43,6 +43,7 @@ public class HomeController {
     // Contact Page
     @GetMapping("/contact")
     public String contact() {
+        model.addAttribute("contactMessage", new ContactMessage());
         return "contact";
     }
 }
