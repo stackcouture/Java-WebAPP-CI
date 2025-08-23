@@ -51,7 +51,7 @@ pipeline {
         stage('Build + Test') {
             steps {
                 echo "Building and running tests..."
-                sh 'mvn clean verify jacoco:report -DskipTests'
+                sh 'mvn clean verify jacoco:report'
             }
         }
 
