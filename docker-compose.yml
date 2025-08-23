@@ -17,7 +17,7 @@ services:
     networks:
       - spring-net
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "springuser", "--password=springpass"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "mysql", "-u", "springuser", "--password=springpass"]
       interval: 10s
       retries: 5
       timeout: 5s
