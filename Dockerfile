@@ -6,7 +6,7 @@ RUN apk add --no-cache curl && \
 USER spring:spring
 WORKDIR /home/spring
 
-COPY --chown=spring:spring target/app.jar app.jar
+COPY --chown=spring:spring target/*.jar app.jar
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD curl --silent --fail http://localhost:8080/demo || exit 1
