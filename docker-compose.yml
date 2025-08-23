@@ -18,10 +18,10 @@ services:
       - spring-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "springuser", "--password=springpass"]
-      interval: 30s
+      interval: 10s
       retries: 5
-      timeout: 30s
-      start_period: 60s
+      timeout: 5s
+      start_period: 30s
 
   springboot-app:
     build:
@@ -34,12 +34,12 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/springboot_db
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/springboot_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
       SPRING_DATASOURCE_USERNAME: springuser
       SPRING_DATASOURCE_PASSWORD: springpass
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_SHOW_SQL: true
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQL8Dialect
     networks:
       - spring-net
     restart: always
