@@ -58,7 +58,7 @@ pipeline {
         stage('Javadoc') {
             steps {
                 echo "Generating Javadoc..."
-                sh 'mvn javadoc:javadoc'
+                sh 'mvn javadoc:javadoc -X'
             }
         }
 
@@ -120,17 +120,17 @@ pipeline {
         //     }
         // }
 
-        // stage('Build Docker Image') {
-        //     steps {
-        //         script {
-        //             def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def localImageTag = "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}"
                     
-        //             echo "Building Docker image locally for commit: ${env.COMMIT_SHA} and build: ${env.BUILD_NUMBER}"
-        //             buildDockerImage(localImageTag)
-        //             env.IMAGE_TAG = localImageTag
-        //         }
-        //     }
-        // }
+                    echo "Building Docker image locally for commit: ${env.COMMIT_SHA} and build: ${env.BUILD_NUMBER}"
+                    buildDockerImage(localImageTag)
+                    env.IMAGE_TAG = localImageTag
+                }
+            }
+        }
 
         // stage('Security Scans Before Push') {
         //     parallel {
@@ -159,20 +159,20 @@ pipeline {
         //     }
         // }
 
-        // stage('Docker Push') {
-        //     steps {
-        //         script {
-        //             echo "Pushing Docker image: ${env.COMMIT_SHA}"
-        //             dockerPush(
-        //                 imageTag: env.COMMIT_SHA,
-        //                 ecrRepoName: params.ECR_REPO_NAME,
-        //                 awsAccountId: params.AWS_ACCOUNT_ID,
-        //                 region: "${env.REGION}",
-        //                 secretName: 'my-app/secrets'
-        //             )
-        //         }
-        //     }
-        // }
+        stage('Docker Push') {
+            steps {
+                script {
+                    echo "Pushing Docker image: ${env.COMMIT_SHA}"
+                    dockerPush(
+                        imageTag: env.COMMIT_SHA,
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
+                        region: "${env.REGION}",
+                        secretName: 'my-app/secrets'
+                    )
+                }
+            }
+        }
 
         // stage('Sign Image with Cosign') {
         //     steps {
