@@ -3,35 +3,31 @@ FROM 104824081961.dkr.ecr.ap-south-1.amazonaws.com/maven:3.9.6-eclipse-temurin-1
 
 WORKDIR /app
 
-# Copy only what's needed first for better caching
+# Cache dependencies
 COPY pom.xml .
 RUN mvn dependency:go-offline -B
 
-# Now copy the source and build the app
+# Copy source and build
 COPY src ./src
-RUN mvn clean package -DskipTests && cp target/*.jar target/app.jar
+RUN mvn clean package 
 
-# ------------ Stage 2: Create minimal runtime image ------------
+# ------------ Stage 2: Minimal Runtime Image ------------
 FROM 104824081961.dkr.ecr.ap-south-1.amazonaws.com/eclipse-temurin:17-jre-alpine
 
-# Install curl for healthcheck and create non-root user for security
+# Install curl and create non-root user
 RUN apk add --no-cache curl && \
     addgroup -S spring && adduser -S spring -G spring
 
 USER spring:spring
-
-# Set working directory
 WORKDIR /home/spring
 
-# Copy only the final JAR from builder stage
+# Copy final JAR (already named app.jar due to <finalName>)
 COPY --chown=spring:spring --from=builder /app/target/app.jar app.jar
 
-# Health check to ensure the app is responding
+# Health check endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
   CMD curl --silent --fail http://localhost:8080/demo || exit 1
 
-# Expose app port
 EXPOSE 8080
 
-# Start the app
 ENTRYPOINT ["java", "-jar", "app.jar"]

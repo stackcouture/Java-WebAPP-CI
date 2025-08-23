@@ -5,45 +5,48 @@ services:
     image: mysql:8
     container_name: mysql-container
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass         
-      MYSQL_DATABASE: springboot_db         
-      MYSQL_USER: springuser                
-      MYSQL_PASSWORD: springpass            
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: springboot_db
+      MYSQL_USER: springuser
+      MYSQL_PASSWORD: springpass
     ports:
-      - "3306:3306"                         
+      - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql          
+      - mysql-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - spring-net
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "springuser", "--password=springpass"]
-      interval: 30s                         
-      retries: 5                            
-      timeout: 30s                          
-      start_period: 60s                     
+      interval: 30s
+      retries: 5
+      timeout: 30s
+      start_period: 60s
 
   springboot-app:
-    build: .                               
+    build:
+      context: .
+      dockerfile: Dockerfile-dev
     container_name: springboot-container
     ports:
-      - "8080:8080"                        
+      - "8080:8080"
     depends_on:
       mysql:
-        condition: service_healthy         
+        condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/springboot_db  
-      SPRING_DATASOURCE_USERNAME: springuser                         
-      SPRING_DATASOURCE_PASSWORD: springpass                         
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update                          
-      SPRING_JPA_SHOW_SQL: true                                       
-      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect  
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/springboot_db
+      SPRING_DATASOURCE_USERNAME: springuser
+      SPRING_DATASOURCE_PASSWORD: springpass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: true
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
     networks:
       - spring-net
-    restart: always                     
+    restart: always
 
 volumes:
-  mysql-data:                            
+  mysql-data:
 
 networks:
-  spring-net:                             
+  spring-net:
     driver: bridge
