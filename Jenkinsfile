@@ -235,21 +235,21 @@ pipeline {
         //     }
         // }
 
-        // stage('Update Deployment Files') {
-        //     steps {
-        //         script {
-        //             echo "Updating deployment"
-        //             updateImageTag(
-        //                 imageTag: env.COMMIT_SHA,
-        //                 ecrRepoName: params.ECR_REPO_NAME,
-        //                 region: env.REGION,
-        //                 cosignPassword: COSIGN_PASSWORD,
-        //                 awsAccountId: params.AWS_ACCOUNT_ID,
-        //                 secretName: 'my-app/secrets'
-        //             )
-        //         }
-        //     }
-        // }
+        stage('Update Deployment Files') {
+            steps {
+                script {
+                    echo "Updating deployment"
+                    updateImageTag(
+                        imageTag: env.COMMIT_SHA,
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        region: env.REGION,
+                        cosignPassword: COSIGN_PASSWORD,
+                        awsAccountId: params.AWS_ACCOUNT_ID,
+                        secretName: 'my-app/secrets'
+                    )
+                }
+            }
+        }
 
         // stage('Deploy App') {
         //     steps {
