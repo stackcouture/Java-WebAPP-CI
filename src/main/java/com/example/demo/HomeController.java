@@ -37,7 +37,7 @@ public class HomeController {
 
     // Checkout Page
     @GetMapping("/contact")
-    public String shop() {
+    public String contact() {
         return "contact";
     }
 }
