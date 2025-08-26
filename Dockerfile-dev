@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline -B
 
 # Copy source and build
 COPY src ./src
-RUN mvn clean package -DskipTests 
+RUN mvn clean package 
 
 # ------------ Stage 2: Minimal Runtime Image ------------
 FROM 104824081961.dkr.ecr.ap-south-1.amazonaws.com/eclipse-temurin:17-jre-alpine
@@ -25,7 +25,7 @@ WORKDIR /home/spring
 COPY --chown=spring:spring --from=builder /app/target/app.jar app.jar
 
 # Health check endpoint
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s \
   CMD curl --silent --fail http://localhost:8080/demo || exit 1
 
 EXPOSE 8080
