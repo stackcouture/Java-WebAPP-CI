@@ -51,20 +51,19 @@ pipeline {
         stage('Build + Test') {
             steps {
                 echo "Building and running tests..."
-                sh 'mvn clean verify jacoco:report -DskipTests'
+                sh 'mvn clean verify jacoco:report'
             }
         }
 
         stage('Javadoc') {
             steps {
                 echo "Generating Javadoc..."
-                sh 'mvn javadoc:javadoc -X'
+                sh 'mvn javadoc:javadoc'
             }
         }
 
         stage('SBOM + FS Scan') {
             parallel {
-
                 stage('Publish SBOM') {
                     steps {
                         script {
