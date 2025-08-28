@@ -18,8 +18,8 @@ pipeline {
         REGION = 'ap-south-1'
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#java-app'
-        DEPENDENCY_TRACK_URL = 'http://3.111.187.196:8081/api/v1/bom'
-        SONAR_HOST = "http://15.206.94.232:9000"
+        DEPENDENCY_TRACK_URL = 'http://13.233.116.134:8081/api/v1/bom'
+        SONAR_HOST = "http://13.233.116.134:9000"
         SONAR_PROJECT_KEY = 'Java-App'
         COSIGN_PASSWORD = 'admin123'
     }
