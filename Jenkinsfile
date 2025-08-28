@@ -225,14 +225,14 @@ pipeline {
             }
         }
 
-        // stage('Confirm YAML Update') {
-        //     steps {
-        //         script {
-        //             def approver = confirmYamlUpdate()
-        //             echo "YAML update approved by: ${approver}"
-        //         }
-        //     }
-        // }
+        stage('Confirm YAML Update') {
+            steps {
+                script {
+                    def approver = confirmYamlUpdate()
+                    echo "YAML update approved by: ${approver}"
+                }
+            }
+        }
 
         stage('Update Deployment Files') {
             steps {
@@ -250,12 +250,12 @@ pipeline {
             }
         }
 
-        // stage('Deploy App') {
-        //     steps {
-        //         echo "Deploying application..."
-        //         deployApp()
-        //     }
-        // }
+        stage('Deploy App') {
+            steps {
+                echo "Deploying application..."
+                deployApp()
+            }
+        }
 
         // stage('Generate GPT Security Report') {
         //     steps {
