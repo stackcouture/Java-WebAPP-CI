@@ -158,7 +158,7 @@ pipeline {
             }
         }
 
-        stage('Docker Push') {
+        stage('ECR Push') {
             steps {
                 script {
                     echo "Pushing Docker image: ${env.COMMIT_SHA}"
