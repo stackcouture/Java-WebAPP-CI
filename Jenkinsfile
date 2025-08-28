@@ -19,7 +19,7 @@ pipeline {
         GIT_URL = 'https://github.com/stackcouture/Java-WebAPP-CI.git'
         SLACK_CHANNEL = '#java-app'
         DEPENDENCY_TRACK_URL = 'http://3.110.181.24:8081/api/v1/bom'
-        SONAR_HOST = "http://13.235.133.249:9000"
+        SONAR_HOST = "http://65.2.3.26:9000"
         SONAR_PROJECT_KEY = 'Java-App'
         COSIGN_PASSWORD = 'admin123'
     }
@@ -82,42 +82,42 @@ pipeline {
                     }
                 }
 
-                // stage('Trivy FS Scan') {
-                //     options {
-                //         timeout(time: 10, unit: 'MINUTES')
-                //     }
-                //     steps {
-                //         echo "Running Trivy filesystem scan..."
-                //         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
+                stage('Trivy FS Scan') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy filesystem scan..."
+                        sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         
-                //         script {
-                //             runTrivyScanUnified("filesystem-scan",".", "fs")
-                //         }
-                //     }
-                // }
+                        script {
+                            runTrivyScanUnified("filesystem-scan",".", "fs")
+                        }
+                    }
+                }
             }
         }
 
-        // stage('SonarQube Analysis & Gate') {
-        //     steps {
-        //         echo "Running SonarQube scan..."
-        //         sonarScan(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             sources: 'src/main/java,src/test/java',
-        //             binaries: 'target/classes',
-        //             exclusions: '**/*.js',
-        //             scannerTool: 'sonar-scanner',
-        //             sonarEnv: 'sonar-server',
-        //             jacocoReportPath: 'target/site/jacoco/jacoco.xml'
-        //         )
-        //         echo "Checking SonarQube quality gate..."
-        //         sonarQualityGateCheck(
-        //             projectKey: env.SONAR_PROJECT_KEY,
-        //             secretName: 'my-app/secrets',
-        //             timeoutMinutes: 5
-        //         )
-        //     }
-        // }
+        stage('SonarQube Analysis & Gate') {
+            steps {
+                echo "Running SonarQube scan..."
+                sonarScan(
+                    projectKey: env.SONAR_PROJECT_KEY,
+                    sources: 'src/main/java,src/test/java',
+                    binaries: 'target/classes',
+                    exclusions: '**/*.js',
+                    scannerTool: 'sonar-scanner',
+                    sonarEnv: 'sonar-server',
+                    jacocoReportPath: 'target/site/jacoco/jacoco.xml'
+                )
+                echo "Checking SonarQube quality gate..."
+                sonarQualityGateCheck(
+                    projectKey: env.SONAR_PROJECT_KEY,
+                    secretName: 'my-app/secrets',
+                    timeoutMinutes: 5
+                )
+            }
+        }
 
         stage('Build Docker Image') {
             steps {
@@ -131,32 +131,32 @@ pipeline {
             }
         }
 
-        // stage('Security Scans Before Push') {
-        //     parallel {
-        //         stage('Trivy Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Trivy scan before push..."
-        //                 runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
-        //             }
-        //         }
-        //         stage('Snyk Before Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Snyk scan before push..."
-        //                 runSnykScan(
-        //                     stageName: "before-push",
-        //                     imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
-        //                     secretName: 'my-app/secrets'
-        //                 )
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Security Scans Before Push') {
+            parallel {
+                stage('Trivy Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy scan before push..."
+                        runTrivyScanUnified("before-push", "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}", "image")
+                    }
+                }
+                stage('Snyk Before Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Snyk scan before push..."
+                        runSnykScan(
+                            stageName: "before-push",
+                            imageTag: "${params.ECR_REPO_NAME}:${env.COMMIT_SHA}",
+                            secretName: 'my-app/secrets'
+                        )
+                    }
+                }
+            }
+        }
 
         stage('Docker Push') {
             steps {
@@ -173,57 +173,57 @@ pipeline {
             }
         }
 
-        // stage('Sign Image with Cosign') {
-        //     steps {
-        //         script {
-        //             echo "Signing Docker image: ${env.COMMIT_SHA}"
-        //             signImageWithCosign(
-        //                 imageTag: env.COMMIT_SHA,
-        //                 ecrRepoName: params.ECR_REPO_NAME,
-        //                 region: env.REGION,
-        //                 cosignPassword: COSIGN_PASSWORD,
-        //                 awsAccountId: params.AWS_ACCOUNT_ID
-        //             )
+        stage('Sign Image with Cosign') {
+            steps {
+                script {
+                    echo "Signing Docker image: ${env.COMMIT_SHA}"
+                    signImageWithCosign(
+                        imageTag: env.COMMIT_SHA,
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        region: env.REGION,
+                        cosignPassword: COSIGN_PASSWORD,
+                        awsAccountId: params.AWS_ACCOUNT_ID
+                    )
 
-        //             def digest = getImageDigest(
-        //                 ecrRepoName: params.ECR_REPO_NAME,
-        //                 imageTag: env.COMMIT_SHA,
-        //                 region: env.REGION
-        //             )                    
-        //             env.IMAGE_DIGEST = digest
-        //         }
-        //     }
-        // }
+                    def digest = getImageDigest(
+                        ecrRepoName: params.ECR_REPO_NAME,
+                        imageTag: env.COMMIT_SHA,
+                        region: env.REGION
+                    )                    
+                    env.IMAGE_DIGEST = digest
+                }
+            }
+        }
 
-        // stage('Security Scans After Push') {
-        //     parallel {
-        //         stage('Trivy After Push') {
-        //             options {
-        //                 timeout(time: 10, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 echo "Running Trivy scan after push..."
-        //                 runTrivyScanUnified("after-push",
-        //                     "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.IMAGE_DIGEST}", "image")
-        //             }
-        //         }
-        //         stage('Snyk After Push') {
-        //             options {
-        //                 timeout(time: 15, unit: 'MINUTES')
-        //             }
-        //             steps {
-        //                 retry(2) {
-        //                     echo "Running Snyk scan after push..."
-        //                     runSnykScan(
-        //                         stageName: "after-push",
-        //                         imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.IMAGE_DIGEST}",
-        //                         secretName: 'my-app/secrets'
-        //                     )
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Security Scans After Push') {
+            parallel {
+                stage('Trivy After Push') {
+                    options {
+                        timeout(time: 10, unit: 'MINUTES')
+                    }
+                    steps {
+                        echo "Running Trivy scan after push..."
+                        runTrivyScanUnified("after-push",
+                            "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.IMAGE_DIGEST}", "image")
+                    }
+                }
+                stage('Snyk After Push') {
+                    options {
+                        timeout(time: 15, unit: 'MINUTES')
+                    }
+                    steps {
+                        retry(2) {
+                            echo "Running Snyk scan after push..."
+                            runSnykScan(
+                                stageName: "after-push",
+                                imageTag: "${params.AWS_ACCOUNT_ID}.dkr.ecr.${env.REGION}.amazonaws.com/${params.ECR_REPO_NAME}@${env.IMAGE_DIGEST}",
+                                secretName: 'my-app/secrets'
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // stage('Confirm YAML Update') {
         //     steps {
