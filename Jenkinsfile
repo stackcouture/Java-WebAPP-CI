@@ -62,41 +62,41 @@ pipeline {
             }
         }
 
-        stage('SBOM + FS Scan') {
-            parallel {
-                // stage('Publish SBOM') {
-                //     steps {
-                //         script {
-                //             if (!fileExists('target/bom.xml')) {
-                //                 error "SBOM file target/bom.xml not found!"
-                //             }
-                //             echo "Uploading SBOM to Dependency Track..."
-                //             uploadSbomToDependencyTrack(
-                //                 sbomFile: 'target/bom.xml',
-                //                 projectName: "${params.ECR_REPO_NAME}",
-                //                 projectVersion: "${env.COMMIT_SHA}",
-                //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
-                //                 secretName: 'my-app/secrets'
-                //             )
-                //         }
-                //     }
-                // }
+        // stage('SBOM + FS Scan') {
+        //     parallel {
+        //         // stage('Publish SBOM') {
+        //         //     steps {
+        //         //         script {
+        //         //             if (!fileExists('target/bom.xml')) {
+        //         //                 error "SBOM file target/bom.xml not found!"
+        //         //             }
+        //         //             echo "Uploading SBOM to Dependency Track..."
+        //         //             uploadSbomToDependencyTrack(
+        //         //                 sbomFile: 'target/bom.xml',
+        //         //                 projectName: "${params.ECR_REPO_NAME}",
+        //         //                 projectVersion: "${env.COMMIT_SHA}",
+        //         //                 dependencyTrackUrl: "${env.DEPENDENCY_TRACK_URL}",
+        //         //                 secretName: 'my-app/secrets'
+        //         //             )
+        //         //         }
+        //         //     }
+        //         // }
 
-                // stage('Trivy FS Scan') {
-                //     options {
-                //         timeout(time: 10, unit: 'MINUTES')
-                //     }
-                //     steps {
-                //         echo "Running Trivy filesystem scan..."
-                //         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
+        //         // stage('Trivy FS Scan') {
+        //         //     options {
+        //         //         timeout(time: 10, unit: 'MINUTES')
+        //         //     }
+        //         //     steps {
+        //         //         echo "Running Trivy filesystem scan..."
+        //         //         sh "mkdir -p contrib && curl -sSL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/html.tpl -o contrib/html.tpl"
                         
-                //         script {
-                //             runTrivyScanUnified("filesystem-scan",".", "fs")
-                //         }
-                //     }
-                // }
-            }
-        }
+        //         //         script {
+        //         //             runTrivyScanUnified("filesystem-scan",".", "fs")
+        //         //         }
+        //         //     }
+        //         // }
+        //     }
+        // }
 
         // stage('SonarQube Analysis & Gate') {
         //     steps {
